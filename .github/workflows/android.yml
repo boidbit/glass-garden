@@ -54,7 +54,7 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk "dist/KaanchKaKamra-${GITHUB_RUN_NUMBER}.apk"
           cp android/app/build/outputs/apk/debug/app-debug.apk dist/KaanchKaKamra.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: KaanchKaKamra-apk
           path: dist/KaanchKaKamra-${{ github.run_number }}.apk
