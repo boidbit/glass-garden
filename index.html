@@ -324,6 +324,137 @@
   @media (max-height: 560px) { .stats.three { grid-template-columns: repeat(3, 1fr); } .stars { font-size: 1.8rem; } }
 
   #status { position: fixed; inset: 0; display: grid; place-items: center; padding-inline: 16px; color: var(--muted); font-size: 0.95rem; text-align: center; pointer-events: none; z-index: 20; }
+
+  /* ---- Menus: one dark, glassy look for the title screen, pause, settings and results (any system theme) ---- */
+  .menu {
+    --m-ink: #eef6f8;
+    --m-muted: #a9bcc6;
+    --m-panel: rgba(12, 20, 30, 0.9);
+    --m-line: rgba(190, 240, 255, 0.16);
+    --m-chip: rgba(255, 255, 255, 0.07);
+    --m-chip-hi: rgba(255, 255, 255, 0.12);
+    --m-accent: #5ff2dc;
+    --m-accent2: #4fb6f0;
+    --m-on: #062227;
+    --m-gold: #ffd36b;
+    color: var(--m-ink);
+    color-scheme: dark;
+    background: radial-gradient(ellipse at 50% 0%, rgba(30, 70, 90, 0.35), rgba(4, 8, 14, 0.72) 70%);
+  }
+  .menu button {
+    color: var(--m-ink);
+    background: var(--m-chip);
+    border-color: var(--m-line);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .menu button:hover { border-color: rgba(95, 242, 220, 0.6); }
+  .menu button:focus-visible { outline-color: var(--m-accent); }
+  .menu button.on, .menu button.primary {
+    background: linear-gradient(135deg, var(--m-accent), var(--m-accent2));
+    color: var(--m-on);
+    border-color: transparent;
+  }
+  .menu .panel {
+    background: var(--m-panel);
+    border: 1px solid var(--m-line);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .menu .tagline, .menu .fine, .menu .runnote, .menu .note { color: var(--m-muted); }
+  .menu .rows .row > span { color: var(--m-ink); font-weight: 600; }
+  .menu .rule { background: var(--m-line); }
+  .menu .stat { background: var(--m-chip); }
+  .menu .stat small { color: var(--m-muted); }
+  .menu .stars i { color: rgba(255, 255, 255, 0.08); -webkit-text-stroke-color: var(--m-muted); }
+  .menu .moods button { background: var(--m-chip); }
+  .menu .moods button small { color: var(--m-muted); }
+  .menu .moods button.on small { color: var(--m-on); }
+
+  /* the title screen: the brand on top, then big cards */
+  .menuwrap { margin: auto; width: min(30rem, 100%); display: grid; gap: 22px; }
+  .brand { display: flex; align-items: center; gap: 14px; animation: rise 0.7s ease-out both; }
+  .brand .mark { width: 68px; height: 68px; flex: none; filter: drop-shadow(0 8px 22px rgba(79, 198, 224, 0.45)); }
+  .brandtext { min-width: 0; }
+  .menu .logo { font-size: clamp(2rem, 9vw, 2.9rem); line-height: 0.98; background: linear-gradient(180deg, #ffffff, #bfeff5); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .menu .brand .tagline { margin: 6px 0 0; }
+  .page { display: grid; gap: 14px; padding: 18px; border-radius: 26px; background: var(--m-panel); border: 1px solid var(--m-line); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08); animation: rise 0.55s ease-out both; }
+  .page[hidden] { display: none; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .brand, .page { animation: none; } }
+
+  .menu .modes { grid-template-columns: 1fr; gap: 10px; }
+  .menu .modes button {
+    display: grid;
+    grid-template-columns: 52px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 16px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--m-line);
+    color: var(--m-ink);
+  }
+  .menu .modes button.on { background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03)); color: var(--m-ink); }
+  .menu .modes button:hover, .menu .modes button:focus-visible { border-color: rgba(95, 242, 220, 0.7); background: linear-gradient(135deg, rgba(95, 242, 220, 0.16), rgba(79, 182, 240, 0.06)); }
+  .menu .modes svg { width: 52px; height: 52px; padding: 10px; box-sizing: border-box; border-radius: 16px; background: linear-gradient(135deg, var(--m-accent), var(--m-accent2)); fill: none; stroke: var(--m-on); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .menu .modes button[data-mode="run"] svg { background: linear-gradient(135deg, #ffd36b, #ff8f6b); }
+  .menu .modes span { display: grid; gap: 3px; min-width: 0; text-align: left; }
+  .menu .modes b { font-size: 1.25rem; }
+  .menu .modes small { color: var(--m-muted); font-size: 0.8rem; line-height: 1.3; white-space: normal; }
+  .menu .modes small em { font-style: normal; color: var(--m-gold); font-weight: 700; }
+  .menu .modes .go { font-style: normal; font-size: 1.8rem; color: var(--m-muted); line-height: 1; }
+  .menurow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .menurow button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border-radius: 16px; font-size: 0.9rem; }
+  .menurow svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
+  .pagehead { display: flex; align-items: center; gap: 10px; }
+  .pagehead h2 { flex: 1; margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; }
+  .pagehead .back, .pagehead .close { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 12px; flex: none; }
+  .pagehead svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .pagehead .close { order: 2; }
+
+  .menu .rooms { gap: 10px; }
+  .menu .rooms button { display: grid; gap: 3px; justify-items: start; text-align: left; padding: 14px; border-radius: 18px; background: var(--m-chip); border: 1px solid var(--m-line); color: var(--m-ink); }
+  .menu .rooms button b { font-family: var(--font-display); font-size: 1rem; }
+  .menu .rooms button small { color: var(--m-muted); font-size: 0.72rem; font-weight: 600; }
+  .menu .rooms button.on { background: linear-gradient(135deg, var(--m-accent), var(--m-accent2)); color: var(--m-on); }
+  .menu .rooms button.on small { color: var(--m-on); opacity: 0.8; }
+  .menu .ask small { color: var(--m-muted); font-weight: 600; margin-left: 4px; }
+  .menu .bigbtn { padding: 16px 18px; font-size: 1.05rem; border-radius: 18px; box-shadow: 0 10px 30px rgba(79, 198, 224, 0.3); }
+  .menu .bigbtn:disabled { box-shadow: none; }
+
+  /* settings */
+  .sheet { z-index: 12; }
+  .sheet .panel { width: min(31rem, 100%); }
+  .group { display: grid; gap: 10px; }
+  .group h3 { margin: 0; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--m-accent); }
+  .group .rows { padding: 12px 14px; border-radius: 18px; background: var(--m-chip); }
+  .note { margin: 0; font-size: 0.78rem; line-height: 1.35; }
+  .note:empty { display: none; }
+  .menu .seg { gap: 4px; padding: 3px; border-radius: 999px; background: rgba(0, 0, 0, 0.25); }
+  .menu .seg button { border: 0; background: transparent; padding: 7px 11px; }
+  .menu .seg button.on { background: linear-gradient(135deg, var(--m-accent), var(--m-accent2)); }
+  /* on / off switches */
+  .menu button.switch { position: relative; width: 52px; height: 30px; padding: 0; border-radius: 999px; font-size: 0; color: transparent; background: rgba(255, 255, 255, 0.14); border: 0; }
+  .menu button.switch::after { content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 50%; background: #ffffff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); transition: transform 0.18s ease; }
+  .menu button.switch.on { background: linear-gradient(135deg, var(--m-accent), var(--m-accent2)); }
+  .menu button.switch.on::after { transform: translateX(22px); }
+  .how { margin: 0; padding-left: 1.2rem; display: grid; gap: 10px; color: var(--m-muted); font-size: 0.9rem; line-height: 1.45; }
+  .how b { color: var(--m-ink); }
+
+  /* the loading line under the title */
+  #status { inset: auto 16px calc(env(safe-area-inset-bottom, 0px) + 18px) 16px; place-items: end center; color: #cfe8ee; font-size: 0.85rem; z-index: 11; }
+  #status::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -2px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #5ff2dc; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* the in-game buttons in the same style */
+  .topbar button, .tool { background: rgba(12, 20, 30, 0.55); color: #eef6f8; border-color: rgba(190, 240, 255, 0.18); }
+  .topbar button.on, .tool.on, #jodo:not(:disabled) { background: linear-gradient(135deg, #5ff2dc, #4fb6f0); color: #062227; }
+  .caption { background: rgba(12, 20, 30, 0.55); color: #eef6f8; border-color: rgba(190, 240, 255, 0.18); }
+
+  /* no blur behind the menus and buttons: blurring a moving 3D picture costs a lot every frame */
+  .menu *, .menu, .topbar *, .dock *, .card, .stick, .runammo { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .card { background: rgba(12, 20, 30, 0.62); }
 </style>
 
 <div id="stage" role="img" aria-label="A 3D room full of glass that you stand inside. Break things with a slingshot, a ball or a hammer, then rewind time to put everything back."></div>
@@ -364,63 +495,96 @@
 <div id="runFlash" class="runflash"></div>
 <div id="wipe" class="wipe"></div>
 
-<!-- Start -->
-<div id="startScreen" class="overlay">
-  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="startTitle">
-    <h1 class="logo" id="startTitle">Kaanch Ka Kamra</h1>
-    <p class="tagline">Break glass. Breathe out. Put it all back.</p>
-    <p class="ask" id="moodAsk">How stressed do you feel right now?</p>
-    <div class="moods" id="moodBefore" role="group" aria-labelledby="moodAsk">
-      <button type="button" data-mood="1" aria-pressed="false"><span>😌</span><small>Calm</small></button>
-      <button type="button" data-mood="2" aria-pressed="false"><span>🙂</span><small>Okay</small></button>
-      <button type="button" data-mood="3" aria-pressed="false"><span>😐</span><small>Tense</small></button>
-      <button type="button" data-mood="4" aria-pressed="false"><span>😣</span><small>Stressed</small></button>
-      <button type="button" data-mood="5" aria-pressed="false"><span>😫</span><small>Very</small></button>
-    </div>
-    <div class="modes" id="modePick" role="group" aria-label="Mode">
-      <button type="button" data-mode="free" class="on" aria-pressed="true"><b>Free play</b><small>Smash at your own pace</small></button>
-      <button type="button" data-mode="run" aria-pressed="false"><b>Glass Run</b><small>New · endless</small></button>
-    </div>
-    <p class="runnote" id="runNote" hidden>An endless path through a garden, a jungle, the mountains and along a river. Break the glass in your way, hit the glowing gems for more pebbles, and see how far you get.</p>
-    <div class="rooms" id="roomPick" role="group" aria-label="Room">
-      <button type="button" data-room="living" class="on" aria-pressed="true">Living room</button>
-      <button type="button" data-room="kitchen" aria-pressed="false">Kitchen</button>
-      <button type="button" data-room="glass" aria-pressed="false">Glass House</button>
-      <button type="button" data-room="garage" aria-pressed="false">Garage</button>
-    </div>
-    <button id="startBtn" class="primary bigbtn" type="button" disabled>Loading the room…</button>
-    <p class="fine">Best with sound on.</p>
+<!-- Start: the title screen, then the mode's own page -->
+<div id="startScreen" class="overlay menu">
+  <div class="menuwrap">
+    <header class="brand">
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="mkG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9ff6ea"/><stop offset="0.55" stop-color="#4fc6e0"/><stop offset="1" stop-color="#7a7cf0"/></linearGradient>
+        </defs>
+        <rect x="6" y="6" width="52" height="52" rx="14" fill="url(#mkG)" opacity="0.92"/>
+        <rect x="6" y="6" width="52" height="52" rx="14" fill="none" stroke="#ffffff" stroke-opacity="0.65" stroke-width="2"/>
+        <clipPath id="mkC"><rect x="8" y="8" width="48" height="48" rx="12"/></clipPath>
+        <g clip-path="url(#mkC)" stroke="#0b2230" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7">
+          <path d="M37 27 L44 19 L52 12M37 27 L47 29 L58 33M37 27 L40 39 L45 56M37 27 L29 38 L20 54M37 27 L24 25 L6 22M37 27 L34 16 L30 4"/>
+          <path d="M33 23 L40 22 L42 30 L34 32 Z" stroke-width="1.2"/>
+        </g>
+        <path d="M14 16 L24 13" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+      </svg>
+      <div class="brandtext">
+        <h1 class="logo" id="startTitle">Kaanch Ka Kamra</h1>
+        <p class="tagline">Break glass. Breathe out. Put it all back.</p>
+      </div>
+    </header>
+
+    <section class="page" id="pgHome">
+      <div class="modes" id="modePick" role="group" aria-label="Mode">
+        <button type="button" data-mode="free" class="on" aria-pressed="true">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 40V20l16-12 16 12v20z"/><path d="M19 40V28h10v12"/><path d="M13 22h6v6h-6zM29 22h6v6h-6z"/></svg>
+          <span><b>Free play</b><small>Four cosy rooms full of glass. Smash at your own pace.</small></span>
+          <i class="go" aria-hidden="true">›</i>
+        </button>
+        <button type="button" data-mode="run" aria-pressed="false">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M18 42 22 8M30 42 26 8"/><path d="M20 30h8M21 20h6M22 12h4"/><path d="M10 42h28"/></svg>
+          <span><b>Glass Run</b><small>Endless garden, jungle, mountains and river. <em id="bestRun"></em></small></span>
+          <i class="go" aria-hidden="true">›</i>
+        </button>
+      </div>
+      <div class="menurow">
+        <button type="button" id="setBtnHome"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Settings</button>
+        <button type="button" id="howBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6M12 16.8v.2"/></svg>How to play</button>
+      </div>
+      <p class="fine" id="lifeHome"></p>
+    </section>
+
+    <section class="page" id="pgPlay" hidden>
+      <div class="pagehead">
+        <button type="button" class="back" id="backHome" aria-label="Back to the title screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <h2 id="pgPlayTitle">Free play</h2>
+      </div>
+      <div class="rooms" id="roomPick" role="group" aria-label="Room">
+        <button type="button" data-room="living" class="on" aria-pressed="true"><b>Living room</b><small>Vases, lamps, a chandelier</small></button>
+        <button type="button" data-room="kitchen" aria-pressed="false"><b>Kitchen</b><small>Glasses, jars, bottles</small></button>
+        <button type="button" data-room="glass" aria-pressed="false"><b>Glass House</b><small>A whole greenhouse</small></button>
+        <button type="button" data-room="garage" aria-pressed="false"><b>Garage</b><small>Windscreens, a TV, bowling</small></button>
+      </div>
+      <p class="runnote" id="runNote" hidden>Break the glass in your way, hit the glowing gems for more pebbles, and bring down the glass pavilion before every checkpoint.</p>
+      <p class="ask" id="moodAsk">How stressed do you feel right now? <small>Optional</small></p>
+      <div class="moods" id="moodBefore" role="group" aria-labelledby="moodAsk">
+        <button type="button" data-mood="1" aria-pressed="false"><span>😌</span><small>Calm</small></button>
+        <button type="button" data-mood="2" aria-pressed="false"><span>🙂</span><small>Okay</small></button>
+        <button type="button" data-mood="3" aria-pressed="false"><span>😐</span><small>Tense</small></button>
+        <button type="button" data-mood="4" aria-pressed="false"><span>😣</span><small>Stressed</small></button>
+        <button type="button" data-mood="5" aria-pressed="false"><span>😫</span><small>Very</small></button>
+      </div>
+      <button id="startBtn" class="primary bigbtn" type="button" disabled>Loading the room…</button>
+      <p class="fine">Best with sound on.</p>
+    </section>
   </div>
 </div>
 
 <!-- Pause -->
-<div id="pauseSheet" class="overlay" hidden>
+<div id="pauseSheet" class="overlay menu" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
     <h2 id="pauseTitle">Paused</h2>
+    <button id="resumeBtn" class="primary bigbtn" type="button">Resume</button>
     <div class="rows">
-      <div class="row" id="rowRoom"><span>Room</span><div class="seg" id="roomSeg"><button type="button" data-room="living">Living room</button><button type="button" data-room="kitchen">Kitchen</button><button type="button" data-room="glass">Glass House</button><button type="button" data-room="garage">Garage</button></div></div>
-      <div class="row"><span>Time of day</span><div class="seg" id="todSeg" role="group" aria-label="Time of day"><button type="button" data-tod="0">Day</button><button type="button" data-tod="1">Evening</button><button type="button" data-tod="2">Night</button><button type="button" data-tod="auto">Cycle</button></div></div>
-      <div class="row"><span>Rain</span><button id="rainBtn" type="button" aria-pressed="false">Off</button></div>
+      <div class="row" id="rowRoom"><span>Room</span><div class="seg" id="roomSeg"><button type="button" data-room="living">Living</button><button type="button" data-room="kitchen">Kitchen</button><button type="button" data-room="glass">Glass House</button><button type="button" data-room="garage">Garage</button></div></div>
       <div class="row" id="rowRun"><span>Glass Run</span><div class="seg"><button type="button" id="runRestart">Restart</button><button type="button" id="runQuit">Free play</button></div></div>
-      <div class="row" id="rowBreathe"><span>Breathe mode</span><button id="saansBtn" type="button" aria-pressed="false">Off</button></div>
-      <div class="rule"></div>
-      <div class="row"><span>Aim</span><div class="seg" id="aimSeg" role="group" aria-label="Aim style"><button type="button" data-aim="crosshair">Crosshair</button><button type="button" data-aim="tap">Tap to aim</button></div></div>
-      <div class="row"><span>Aim assist</span><button id="assistBtn" type="button" aria-pressed="true">On</button></div>
-      <div class="row"><span>Graphics</span><div class="seg" id="gfxSeg" role="group" aria-label="Graphics"><button type="button" data-gfx="auto">Auto</button><button type="button" data-gfx="0">Low</button><button type="button" data-gfx="1">Medium</button><button type="button" data-gfx="2">High</button></div></div>
-      <div class="rule"></div>
-      <div class="row"><span>Sound</span><button id="sound" type="button" aria-pressed="true">On</button></div>
-      <div class="row"><span>Music</span><button id="musicBtn" type="button" aria-pressed="true">On</button></div>
-      <div class="row"><span>Vibration</span><button id="hapticBtn" type="button" aria-pressed="true">On</button></div>
+      <div class="row"><span>Time of day</span><div class="seg" id="todSeg" role="group" aria-label="Time of day"><button type="button" data-tod="0">Day</button><button type="button" data-tod="1">Evening</button><button type="button" data-tod="2">Night</button><button type="button" data-tod="auto">Cycle</button></div></div>
+      <div class="row"><span>Rain</span><button id="rainBtn" class="switch" type="button" aria-pressed="false">Off</button></div>
+      <div class="row" id="rowBreathe"><span>Breathe mode</span><button id="saansBtn" class="switch" type="button" aria-pressed="false">Off</button></div>
     </div>
     <div class="pair">
+      <button id="setBtnPause" type="button">Settings</button>
       <button id="endBtn" type="button">End session</button>
-      <button id="resumeBtn" class="primary" type="button">Resume</button>
     </div>
   </div>
 </div>
 
 <!-- Session summary -->
-<div id="summary" class="overlay" hidden>
+<div id="summary" class="overlay menu" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sumTitle">
     <h2 id="sumTitle">Session complete</h2>
     <div class="stats">
@@ -447,7 +611,7 @@
 </div>
 
 <!-- Glass Run result -->
-<div id="runCard" class="overlay" hidden>
+<div id="runCard" class="overlay menu" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="runTitle">
     <h2 id="runTitle">Level clear!</h2>
     <p class="tagline" id="runSub"></p>
@@ -463,6 +627,59 @@
       <button id="runFree" type="button">Free play</button>
       <button id="runAgain" class="primary" type="button">Play again</button>
     </div>
+  </div>
+</div>
+
+
+<!-- Settings -->
+<div id="settingsSheet" class="overlay menu sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="pagehead">
+      <h2 id="setTitle">Settings</h2>
+      <button type="button" class="close" id="setClose" aria-label="Close settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <section class="group">
+      <h3>Graphics</h3>
+      <div class="rows">
+        <div class="row"><span>Quality</span><div class="seg" id="gfxSeg" role="group" aria-label="Graphics"><button type="button" data-gfx="auto">Auto</button><button type="button" data-gfx="0">Low</button><button type="button" data-gfx="1">Medium</button><button type="button" data-gfx="2">High</button></div></div>
+        <div class="row"><span>Frame rate</span><div class="seg" id="fpsSeg" role="group" aria-label="Frame rate"><button type="button" data-fps="auto">Auto</button><button type="button" data-fps="30">30 · cool</button><button type="button" data-fps="60">60 · smooth</button></div></div>
+        <p class="note" id="gfxNote"></p>
+      </div>
+    </section>
+    <section class="group">
+      <h3>Sound</h3>
+      <div class="rows">
+        <div class="row"><span>Sound effects</span><button id="sound" class="switch" type="button" aria-pressed="true">On</button></div>
+        <div class="row"><span>Calm music</span><button id="musicBtn" class="switch" type="button" aria-pressed="true">On</button></div>
+      </div>
+    </section>
+    <section class="group">
+      <h3>Controls</h3>
+      <div class="rows">
+        <div class="row"><span>Aim</span><div class="seg" id="aimSeg" role="group" aria-label="Aim style"><button type="button" data-aim="crosshair">Crosshair</button><button type="button" data-aim="tap">Tap to aim</button></div></div>
+        <div class="row"><span>Aim assist</span><button id="assistBtn" class="switch" type="button" aria-pressed="true">On</button></div>
+        <div class="row"><span>Vibration</span><button id="hapticBtn" class="switch" type="button" aria-pressed="true">On</button></div>
+      </div>
+    </section>
+    <button id="setDone" class="primary bigbtn" type="button">Done</button>
+  </div>
+</div>
+
+<!-- How to play -->
+<div id="howSheet" class="overlay menu sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="howTitle">
+    <div class="pagehead">
+      <h2 id="howTitle">How to play</h2>
+      <button type="button" class="close" id="howClose" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <ol class="how">
+      <li><b>Aim and shoot.</b> Tap the glass to fire the slingshot. Hold to keep firing. Drag to look around.</li>
+      <li><b>Free play.</b> Walk with the stick (or WASD), switch to the ball, the hammer or an earthquake on the right. Nothing is lost: <b>Rewind</b> puts every piece back.</li>
+      <li><b>Glass Run.</b> The path moves on its own. Break the glass in your way before you reach it, hit the glowing gems for pebbles, and keep a streak going for double and triple shots.</li>
+      <li><b>Checkpoints.</b> Bring down the glass pavilion before each checkpoint for a slow-motion finish and ten pebbles. If you run out, carry on from your last checkpoint.</li>
+      <li><b>Breathe mode.</b> Turn it on in the pause menu. Hold your finger down and breathe in as the ring grows, then let go to breathe out and break the glass.</li>
+    </ol>
+    <button id="howDone" class="primary bigbtn" type="button">Got it</button>
   </div>
 </div>
 
@@ -604,6 +821,7 @@
         emissiveIntensity: glow,
         side: THREE.DoubleSide,
       }));
+      if (glassCache.lite) liteOne(glassCache.get(key));
     }
     return glassCache.get(key);
   }
@@ -14158,6 +14376,10 @@
     scene.fog.color.copy(hz).lerp(_zc1, mix('fogAmt'));
     scene.fog.near = mix('near');
     scene.fog.far = mix('far');
+    if (inRun && coarse && gfxTier() !== 'high') {
+      scene.fog.near *= 0.75;
+      scene.fog.far *= 0.7;
+    }
     hz.lerp(_zc1, mix('sky'));
     scene.background.copy(hz);
     tz(A.zen, _zc2).lerp(tz(B.zen, _zc3), k);
@@ -17247,6 +17469,56 @@
   }
 
   // =====================================================================
+  // Keeping phones cool: a frame-rate limit (30 on phones unless you pick 60), glass that does not
+  // redraw the whole room a second time to bend light (on phones and on Low), fewer pixels by default,
+  // a shorter view in the run, a smaller shadow map, and almost no drawing behind the menus.
+  // =====================================================================
+  function fpsCap() {
+    const f = settings.fps || 'auto';
+    if (f === '60') return 60;
+    if (f === '30') return 30;
+    return coarse ? 30 : 60;
+  }
+  const FRM = { last: 0 };
+  // true when this display refresh should be skipped
+  function skipFrame() {
+    const now = performance.now();
+    const still = gameState === 'paused' || gameState === 'summary';
+    const iv = 1000 / (still ? 5 : fpsCap());
+    if (now - FRM.last < iv - 1.5) return true;
+    FRM.last = now;
+    return false;
+  }
+  // light glass: no refraction pass (that pass draws the whole room again, every frame)
+  function liteOne(m) {
+    if (!m.userData.full) m.userData.full = { transmission: m.transmission, transparent: m.transparent, opacity: m.opacity, depthWrite: m.depthWrite, envMapIntensity: m.envMapIntensity };
+    m.transmission = 0;
+    m.transparent = true;
+    m.opacity = 0.42;
+    m.depthWrite = false;
+    m.envMapIntensity = 2;
+    m.needsUpdate = true;
+  }
+  function fullOne(m) {
+    const f = m.userData.full;
+    if (!f) return;
+    Object.assign(m, f);
+    m.needsUpdate = true;
+  }
+  function wantLiteGlass() {
+    const t = gfxTier();
+    return quality.lite || t === 'low' || (coarse && t !== 'high');
+  }
+  function applyGlassMode() {
+    const on = wantLiteGlass();
+    if (glassCache.lite === on) return;
+    glassCache.lite = on;
+    for (const m of glassCache.values()) (on ? liteOne : fullOne)(m);
+  }
+  // phones draw a smaller shadow map
+  if (coarse) sun.shadow.mapSize.set(1024, 1024);
+
+  // =====================================================================
   // Game flow: the start card (with a mood check), the pause sheet, and the end-of-session summary
   // =====================================================================
   let gameState = 'start'; // start | play | paused | summary
@@ -17478,7 +17750,8 @@
     resetRoom();
     setState('start');
     showOverlay(startScreen, true);
-    $('startBtn').textContent = 'Start';
+    showPage('pgHome');
+    $('startBtn').textContent = currentRoom === 'run' ? 'Start the run' : 'Play';
   });
   window.addEventListener('keydown', (e) => {
     if (e.code !== 'Escape') return;
@@ -17487,6 +17760,72 @@
     else if (gameState === 'paused') closePause();
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && gameState === 'play' && !window.__testHooks) openPause(); });
+
+  // ---- Menus: the title screen's pages, a settings sheet and a how-to-play sheet ----
+  function showPage(id) {
+    ['pgHome', 'pgPlay'].forEach((p) => { $(p).hidden = p !== id; });
+    if (id === 'pgPlay') {
+      const rn = currentRoom === 'run';
+      $('pgPlayTitle').textContent = rn ? 'Glass Run' : 'Free play';
+      $('moodAsk').hidden = rn;
+      $('moodBefore').hidden = rn;
+      const b = $('startBtn');
+      if (!b.disabled) b.textContent = rn ? 'Start the run' : 'Play';
+      if (!b.disabled) b.focus({ preventScroll: true });
+    } else paintHome();
+  }
+  function paintHome() {
+    const rec = store.get('run', {});
+    $('bestRun').textContent = rec.bestD ? `Best ${rec.bestD.toLocaleString('en-US')} m` : '';
+    const life = store.get('life', {});
+    $('lifeHome').textContent = life.glass ? `${life.glass.toLocaleString('en-US')} things broken so far` : '';
+  }
+  document.querySelectorAll('#modePick [data-mode]').forEach((b) => b.addEventListener('click', () => showPage('pgPlay')));
+  $('backHome').addEventListener('click', () => showPage('pgHome'));
+  // sheets over the title screen or the pause menu
+  const sheets = { set: $('settingsSheet'), how: $('howSheet') };
+  let sheetFrom = null;
+  function openSheet(el, from) {
+    sheetFrom = from || null;
+    showOverlay(el, true);
+    const first = el.querySelector('.close');
+    if (first) first.focus({ preventScroll: true });
+    if (el === sheets.set) paintGfxNote();
+  }
+  function closeSheet(el) {
+    showOverlay(el, false);
+    if (sheetFrom) sheetFrom.focus({ preventScroll: true });
+  }
+  $('setBtnHome').addEventListener('click', (e) => openSheet(sheets.set, e.currentTarget));
+  $('setBtnPause').addEventListener('click', (e) => openSheet(sheets.set, e.currentTarget));
+  $('howBtn').addEventListener('click', (e) => openSheet(sheets.how, e.currentTarget));
+  ['setClose', 'setDone'].forEach((id) => $(id).addEventListener('click', () => closeSheet(sheets.set)));
+  ['howClose', 'howDone'].forEach((id) => $(id).addEventListener('click', () => closeSheet(sheets.how)));
+  // Escape closes a sheet before anything else
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Escape') return;
+    for (const el of Object.values(sheets)) {
+      if (!el.hidden && !el.classList.contains('fade')) {
+        closeSheet(el);
+        e.stopImmediatePropagation();
+        return;
+      }
+    }
+  }, true);
+  // frame rate
+  bindSeg('fpsSeg', 'fps', () => settings.fps || 'auto', (v) => {
+    settings.fps = v;
+    saveSettings();
+    paintGfxNote();
+  });
+  function paintGfxNote() {
+    const cap = fpsCap();
+    const lite = glassCache.lite;
+    $('gfxNote').textContent = `Now: ${cap} frames a second${lite ? ', light glass' : ', full glass reflections'}. ${coarse ? 'On a phone, 30 keeps it cool and saves battery.' : ''}`.trim();
+  }
+  document.querySelectorAll('#gfxSeg button').forEach((b) => b.addEventListener('click', () => setTimeout(paintGfxNote, 0)));
+  paintHome();
+
 
   // ---- Calm music, made on the spot: slow warm chords with a few soft bells on top ----
   let music = null;
@@ -17573,7 +17912,8 @@
     const g = settings.gfx;
     quality.fixed = g !== 'auto' || window.__fixedQuality !== undefined;
     if (window.__fixedQuality !== undefined) return;
-    setQuality(g === 'auto' ? (coarse ? 2 : 3) : [0, 2, 3][Number(g)]);
+    setQuality(g === 'auto' ? (coarse ? 1 : 3) : coarse ? [0, 1, 2][Number(g)] : [0, 2, 3][Number(g)]);
+    applyGlassMode();
     applyRunGrade();
     atmos.applied = '';
     document.querySelectorAll('#gfxSeg button').forEach((b) => {
@@ -17701,14 +18041,7 @@
   const quality = { level: 3, acc: 0, n: 0, last: 0, changed: 0, fixed: window.__fixedQuality !== undefined };
   function liteGlass() {
     quality.lite = true;
-    for (const m of glassCache.values()) {
-      m.transmission = 0;
-      m.transparent = true;
-      m.opacity = 0.42;
-      m.depthWrite = false;
-      m.envMapIntensity = 2;
-      m.needsUpdate = true;
-    }
+    applyGlassMode();
     // the Glass House panes drop their clear coat
     if (GH.ready) ['thick', 'tempered', 'laminated'].forEach((k) => { GH[k].clearcoat = 0; GH[k].needsUpdate = true; });
     if (GA.M) GA.M.slabs.forEach((m) => { m.clearcoat = 0; m.needsUpdate = true; });
@@ -17719,7 +18052,7 @@
     resize();
   }
   function watchSpeed(now) {
-    if (quality.fixed || document.hidden) {
+    if (quality.fixed || document.hidden || gameState === 'paused' || gameState === 'summary') {
       quality.last = 0;
       return;
     }
@@ -17738,17 +18071,18 @@
     if (clockNow < 3 || now - quality.changed < 2500) return;
     if (quality.level === 0) {
       // already drawing the fewest pixels: if it is still slow, swap the refracting glass for a lighter see-through look
-      quality.slow = fps < 28 ? (quality.slow || 0) + 1 : 0;
+      quality.slow = fps < fpsCap() * 0.47 ? (quality.slow || 0) + 1 : 0;
       if (quality.slow >= 2 && !quality.lite) liteGlass();
       return;
     }
-    if (fps < 38) {
-      setQuality(Math.max(0, quality.level - (fps < 20 ? 2 : 1)));
+    if (fps < fpsCap() * 0.63) {
+      setQuality(Math.max(0, quality.level - (fps < fpsCap() * 0.33 ? 2 : 1)));
       quality.changed = now;
     }
   }
-  setQuality(quality.fixed ? window.__fixedQuality : matchMedia('(pointer: coarse)').matches ? 2 : 3);
+  setQuality(quality.fixed ? window.__fixedQuality : matchMedia('(pointer: coarse)').matches ? 1 : 3);
   applyGfx();
+  applyGlassMode();
 
   function updateShards() {
     for (let i = shards.length - 1; i >= 0; i--) {
@@ -17804,6 +18138,7 @@
   let curtainTick = 0;
   let ready = false;
   function frame() {
+    if (!window.__forceDt && skipFrame()) return;
     const rawDt = window.__forceDt || Math.min(clock.getDelta(), window.__maxDt || 0.05);
     watchSpeed(performance.now());
     if (gameState === 'paused' || gameState === 'summary') {
@@ -17917,7 +18252,7 @@
       statusEl.hidden = true;
       captureEnv();
       $('startBtn').disabled = false;
-      $('startBtn').textContent = 'Start';
+      $('startBtn').textContent = currentRoom === 'run' ? 'Start the run' : 'Play';
       if (window.__autoStart) startGame();
     }
   }

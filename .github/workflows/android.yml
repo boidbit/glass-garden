@@ -1,0 +1,62 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the app's copy of the game and copy it into Android
+        run: npm run sync
+
+      - name: Build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Name the APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/KaanchKaKamra-${GITHUB_RUN_NUMBER}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/KaanchKaKamra.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KaanchKaKamra-apk
+          path: dist/KaanchKaKamra-${{ github.run_number }}.apk
+
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Kaanch Ka Kamra (latest build)" --notes "The newest Android build, made automatically from the main branch. Download KaanchKaKamra.apk and open it on your phone to install." --latest
+          gh release upload latest dist/KaanchKaKamra.apk --clobber
+          gh release edit latest --notes "The newest Android build (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}), made automatically from the main branch. Download KaanchKaKamra.apk and open it on your phone to install."

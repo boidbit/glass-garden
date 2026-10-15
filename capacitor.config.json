@@ -1,0 +1,8 @@
+{
+  "appId": "com.boidbit.kaanchkakamra",
+  "appName": "Kaanch Ka Kamra",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b141c"
+  }
+}
