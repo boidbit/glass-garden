@@ -5322,10 +5322,12 @@
         pre.delayTime.value = 0.014;
         revWet = actx.createGain();
         revWet.gain.value = 0.2;
-        bus.connect(pre);
-        pre.connect(verb);
-        verb.connect(revWet);
-        revWet.connect(master);
+        if (!coarse) {
+          bus.connect(pre);
+          pre.connect(verb);
+          verb.connect(revWet);
+          revWet.connect(master);
+        }
         noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
         const ch = noiseBuf.getChannelData(0);
         for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
@@ -17479,12 +17481,31 @@
     if (f === '30') return 30;
     return coarse ? 30 : 60;
   }
-  const FRM = { last: 0 };
+  const FRM = { last: 0, active: 0 };
+  // something is moving or you are touching the screen: draw at the full rate
+  function markActive() {
+    FRM.active = performance.now();
+  }
+  // is anything in the room moving on its own? (the run always is)
+  function sceneBusy() {
+    if (currentRoom === 'run' || gameState === 'start') return true;
+    if (flying.length || shards.length || hangers.length || fx.length || pendingSplits.length) return true;
+    if (cine.on || rewinding || quake.on || wreck.active || saans.on || atmos.auto || atmos.rain) return true;
+    if (Math.abs(atmos.pos - atmos.goal) > 1e-3) return true;
+    if (ptrs.size || hold || kbHold || keys.size || Math.abs(view.vyaw) + Math.abs(view.vpitch) > 1e-4) return true;
+    for (const p of crumbPools) if (!p.done) return true;
+    for (const m of movers) if (m.body.sleepState !== 2) return true;
+    return false;
+  }
   // true when this display refresh should be skipped
   function skipFrame() {
     const now = performance.now();
     const still = gameState === 'paused' || gameState === 'summary';
-    const iv = 1000 / (still ? 5 : fpsCap());
+    if (!still && sceneBusy()) FRM.active = now;
+    // nothing moving for two seconds: a few frames a second keep the fan and the dust going
+    const idle = !still && now - FRM.active > 2000;
+    FRM.idle = idle;
+    const iv = 1000 / (still ? 5 : idle ? 12 : fpsCap());
     if (now - FRM.last < iv - 1.5) return true;
     FRM.last = now;
     return false;
@@ -17517,6 +17538,7 @@
   }
   // phones draw a smaller shadow map
   if (coarse) sun.shadow.mapSize.set(1024, 1024);
+  for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart']) window.addEventListener(ev, markActive, { passive: true, capture: true });
 
   // =====================================================================
   // Game flow: the start card (with a mood check), the pause sheet, and the end-of-session summary
@@ -17912,7 +17934,7 @@
     const g = settings.gfx;
     quality.fixed = g !== 'auto' || window.__fixedQuality !== undefined;
     if (window.__fixedQuality !== undefined) return;
-    setQuality(g === 'auto' ? (coarse ? 1 : 3) : coarse ? [0, 1, 2][Number(g)] : [0, 2, 3][Number(g)]);
+    setQuality(g === 'auto' ? (coarse ? 2 : 3) : coarse ? [0, 1, 2][Number(g)] : [0, 2, 3][Number(g)]);
     applyGlassMode();
     applyRunGrade();
     atmos.applied = '';
@@ -18052,7 +18074,7 @@
     resize();
   }
   function watchSpeed(now) {
-    if (quality.fixed || document.hidden || gameState === 'paused' || gameState === 'summary') {
+    if (quality.fixed || document.hidden || gameState === 'paused' || gameState === 'summary' || FRM.idle) {
       quality.last = 0;
       return;
     }
@@ -18075,12 +18097,20 @@
       if (quality.slow >= 2 && !quality.lite) liteGlass();
       return;
     }
-    if (fps < fpsCap() * 0.63) {
+    const slowK = coarse ? 0.85 : 0.63;
+    quality.lag = fps < fpsCap() * slowK ? (quality.lag || 0) + 1 : 0;
+    quality.good = fps > fpsCap() * 0.95 ? (quality.good || 0) + 1 : 0;
+    if (quality.lag >= (coarse ? 3 : 1)) {
       setQuality(Math.max(0, quality.level - (fps < fpsCap() * 0.33 ? 2 : 1)));
       quality.changed = now;
+      quality.lag = 0;
+    } else if (coarse && quality.good >= 60 && quality.level < (quality.top ?? 2) && now - quality.changed > 120000) {
+      setQuality(quality.level + 1);
+      quality.changed = now;
+      quality.good = 0;
     }
   }
-  setQuality(quality.fixed ? window.__fixedQuality : matchMedia('(pointer: coarse)').matches ? 1 : 3);
+  setQuality(quality.fixed ? window.__fixedQuality : matchMedia('(pointer: coarse)').matches ? 2 : 3);
   applyGfx();
   applyGlassMode();
 
@@ -18276,7 +18306,7 @@
     window.__kk = {
       view, camera, scene, renderer, quality, fireWreck, getCrumbs: () => crumbPools, getWreck: () => wreck.active, switchRoom, getRoomName: () => currentRoom, gunDebug: () => { gunAim.updateMatrixWorld(true); const p = gunKick.localToWorld(new THREE.Vector3(0, -0.05, 0.04)).project(gunCam); return { p: [p.x, p.y, p.z], vis: gunKick.visible, model: gunModel.visible, aspect: gunCam.aspect, pos: gunAim.position.toArray(), sc: gunAim.scale.x }; }, aimQuery, settings, getFlying: () => flying, startGame, openPause, openSummary, getState: () => gameState, getSession: () => session, setTod, setRain, getAtmos: () => atmos, setSaans, getSaans: () => saans, setQuality, liteGlass, shoot, collide, setTool, getTool: () => tool, throwBall, swingHammer, startQuake, getQuake: () => quake, getBalls: () => balls, strike, say, THREE, resetRoom, startRewind,
       run: (n, dt = 1 / 60) => { window.__forceDt = dt; window.__noRender = true; for (let i = 0; i < n; i++) frame(); window.__forceDt = 0; window.__noRender = false; scene.updateMatrixWorld(); camera.updateMatrixWorld(); },
-      natRef: () => ({ NAT, sun, hemiLight, post }), sceneryStats: (zone, v = 0, gorge = false) => { natMats(); if (zone === 'river') riverMats(); const make = zone === 'jungle' ? jungleScenery : zone === 'mountain' ? mountainScenery : zone === 'river' ? riverScenery : gardenScenery; const B = nBag(); const ms = []; for (const p of (gfxTier() !== 'low' && zone !== 'garden' && !gorge ? ['L', 'L2', 'R', 'R2', 'C'] : ['L', 'R', 'C'])) { const t0 = performance.now(); make(v, B, p, gorge); ms.push(Math.round(performance.now() - t0)); } const tris = {}; for (const k in B) if (B[k] && B[k].p) tris[k] = B[k].p.length / 9; return { ms, tris }; }, forceGates: (list) => { run.plan.intro.push(...list); }, planPreview: (n, from = 0) => { const keep = run.plan; planReset(from); const out = []; for (let k = Math.floor(from / RUN.L); k < Math.floor(from / RUN.L) + n; k++) { const p = planChunk(k * RUN.L); out.push(k * RUN.L + ':' + zoneAt(k * RUN.L + RUN.L - 0.01)[0] + ':' + (p.kind === 'gates' ? p.gates.join('+') : p.kind + (p.variant !== undefined ? p.variant : ''))); } run.plan = keep; return out; }, glassKinds: () => ({ zone: ZONE_GATES, stages: STAGES.map((s) => s[1]).flat() }), getAudio: () => ({ actx, master, bus, ensureAudio, birdCall }), zoneDebug: () => ({ dap: NAT.dap ? NAT.dap.amt.value : -1, tier: gfxTier(), tm: renderer.toneMapping, sun: skyUniforms.uSun.value.toArray(), sunL: sun.position.clone().sub(sun.target.position).normalize().toArray(), zq: zq.length, zt: Object.keys(ZT), tun: Object.keys(TUN), peaks: !!NAT.peaks, amb: AMB.on }), pumpTimed: () => { const t0 = performance.now(); const had = zq.length; pumpZones(); return had ? performance.now() - t0 : -1; }, queueZone, zoneMixNow,
+      natRef: () => ({ NAT, sun, hemiLight, post }), sceneryStats: (zone, v = 0, gorge = false) => { natMats(); if (zone === 'river') riverMats(); const make = zone === 'jungle' ? jungleScenery : zone === 'mountain' ? mountainScenery : zone === 'river' ? riverScenery : gardenScenery; const B = nBag(); const ms = []; for (const p of (gfxTier() !== 'low' && zone !== 'garden' && !gorge ? ['L', 'L2', 'R', 'R2', 'C'] : ['L', 'R', 'C'])) { const t0 = performance.now(); make(v, B, p, gorge); ms.push(Math.round(performance.now() - t0)); } const tris = {}; for (const k in B) if (B[k] && B[k].p) tris[k] = B[k].p.length / 9; return { ms, tris }; }, forceGates: (list) => { run.plan.intro.push(...list); }, planPreview: (n, from = 0) => { const keep = run.plan; planReset(from); const out = []; for (let k = Math.floor(from / RUN.L); k < Math.floor(from / RUN.L) + n; k++) { const p = planChunk(k * RUN.L); out.push(k * RUN.L + ':' + zoneAt(k * RUN.L + RUN.L - 0.01)[0] + ':' + (p.kind === 'gates' ? p.gates.join('+') : p.kind + (p.variant !== undefined ? p.variant : ''))); } run.plan = keep; return out; }, glassKinds: () => ({ zone: ZONE_GATES, stages: STAGES.map((s) => s[1]).flat() }), perfState: () => ({ idle: !!FRM.idle, busy: sceneBusy(), cap: fpsCap(), level: quality.level, pr: renderer.getPixelRatio(), verb: !!(revWet && revWet.numberOfOutputs && actx) }), getAudio: () => ({ actx, master, bus, ensureAudio, birdCall }), zoneDebug: () => ({ dap: NAT.dap ? NAT.dap.amt.value : -1, tier: gfxTier(), tm: renderer.toneMapping, sun: skyUniforms.uSun.value.toArray(), sunL: sun.position.clone().sub(sun.target.position).normalize().toArray(), zq: zq.length, zt: Object.keys(ZT), tun: Object.keys(TUN), peaks: !!NAT.peaks, amb: AMB.on }), pumpTimed: () => { const t0 = performance.now(); const had = zq.length; pumpZones(); return had ? performance.now() - t0 : -1; }, queueZone, zoneMixNow,
       getItems: () => items, getCine: () => cine, getFx: () => fx, getRun: () => run, getHangers: () => hangers, getSfx: () => SFX, playSfx, getWorld: () => world, getDebris: () => debris, getShards: () => shards, getMovers: () => movers,
       getSplats: () => (splats ? { n: splatN, count: splats.count } : null), getRoom: () => room, getBroken: () => brokenCount, getRewind: () => rw, isRewinding: () => rewinding, getLog: () => shardLog,
       breakAll: (n = 1e9) => { room.updateMatrixWorld(true); items.filter((r) => !r.broken).slice(0, n).forEach((r) => shatter(r, r.box.getCenter(new THREE.Vector3()), null, false)); },
