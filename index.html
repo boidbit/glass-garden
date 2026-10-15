@@ -6845,7 +6845,7 @@
   }
   let appliedFov = 0;
   function applyFov() {
-    const fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(rad(baseFov()) / 2) / (view.zoom * (1 + 0.16 * cineK))));
+    const fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(rad(baseFov()) / 2) / (view.zoom * (1 + 0.16 * cineK) * (view.fovK || 1))));
     if (Math.abs(fov - appliedFov) < 1e-3) return;
     appliedFov = fov;
     camera.fov = fov;
@@ -11797,6 +11797,8 @@
       view.pitch += Math.atan((airAlt(ad + 1.5) - airAlt(ad - 1.5)) / 3) * 0.5;
       view.yaw += ak * Math.sin(ad * 0.05) * 0.02;
       view.roll = reduceMotion ? 0 : ak * 0.045 * Math.cos(ad * 0.0935);
+      // a wider view up there, wider still in a burst of speed
+      view.fovK = 1 - 0.12 * ak - 0.05 * Math.min(1, airBoost());
     }
     view.vyaw = view.vpitch = 0;
     view.bob = reduceMotion || run.phase !== 'go' ? 0 : Math.sin(run.z * 2.4) * 0.008;
@@ -11889,7 +11891,8 @@
     const d = RUN.z0 - run.z;
     // a little faster each time round the zones
     let want = 3.6 + Math.min(3.4, d * 0.0017) + Math.min(1.2, Math.floor(cpIndexAt(d) / ZONES.length) * 0.4);
-    want += airBoost();
+    // up in the sky you fly much faster
+    want += airBoost() + 3.2 * airK(d);
     if (run.phase === 'out') want = 0;
     run.v += (want - run.v) * (1 - Math.exp(-dt * (want ? 2.5 : 1.6)));
     const prev = run.z;
@@ -11900,6 +11903,7 @@
       g.done = true;
       const blockers = g.recs.filter((rec) => !rec.broken && !rec.dynamic && !rec.falling && !rec.noBlock && !(rec.sheet && rec.sheet.falling) && runBlocks(rec));
       if (blockers.length || (g.lock && !g.lock.open)) runCrash(g, blockers);
+      else if (g.recs.length && !g.recs.every((x) => x.noBlock) && airK(d) > 0.5) airSwish();
     }
     airPass(prev);
     // checkpoints
@@ -14367,8 +14371,9 @@
     river: { dap: 0.32, fog: '#cddde4', hzMix: 0.35, fogAmt: 0.55, near: 25, far: 190, sky: 0.22, zen: '#4f8fd0', zenAmt: 0.15, hemiK: 1.0, sunK: 1.0, envK: 1.05, expo: 0, cover: -0.05, hills: 1, peaks: 0, tint: '#e6f2ff', tintAmt: 0.25, ground: '#ffffff' },
     mountain: { dap: 0.12, fog: '#c6d4e2', hzMix: 0.35, fogAmt: 0.85, near: 30, far: 210, sky: 0.28, zen: '#3c79d0', zenAmt: 0.35, hemiK: 1.05, sunK: 1.0, envK: 1.1, expo: 0, cover: -0.12, hills: 0, peaks: 1, tint: '#d6e4ff', tintAmt: 0.5, ground: '#8f8f8a' },
   };
-  ZONE_LOOK.skyRun = { dap: 0, fog: '#d6e7f5', hzMix: 0.3, fogAmt: 0.55, near: 45, far: 260, sky: 0.04, zen: '#3d86e8', zenAmt: 0.35, hemiK: 1.15, sunK: 1.35, envK: 1.0, expo: 0.06, cover: -0.05, hills: 0, peaks: 0, tint: '#ffffff', tintAmt: 0.2, ground: '#ffffff', warm: 0.3, fillK: 1.4 };
-  ZONE_LOOK.sky = { dap: 0, fog: '#d6e7f5', hzMix: 0.3, fogAmt: 0.5, near: 45, far: 250, sky: 0.04, zen: '#4a8fe0', zenAmt: 0.3, hemiK: 1.1, sunK: 1.2, envK: 1.0, expo: 0.04, cover: -0.05, hills: 0, peaks: 0, tint: '#ffffff', tintAmt: 0.2, ground: '#ffffff' };
+  // the sky: a deep clear blue, so the glass with its bright edges is what stands out
+  ZONE_LOOK.skyRun = { dap: 0, fog: '#6f9fd8', hzMix: 0.15, fogAmt: 0.85, near: 50, far: 280, sky: 0.7, zen: '#1b4fae', zenAmt: 0.7, hemiK: 1.1, sunK: 1.4, envK: 1.0, expo: 0, cover: -0.2, hills: 0, peaks: 0, tint: '#e8f2ff', tintAmt: 0.2, ground: '#ffffff', warm: 0.25, fillK: 1.5 };
+  ZONE_LOOK.sky = { dap: 0, fog: '#6f9fd8', hzMix: 0.15, fogAmt: 0.8, near: 50, far: 260, sky: 0.65, zen: '#1f56b6', zenAmt: 0.65, hemiK: 1.05, sunK: 1.25, envK: 1.0, expo: 0, cover: -0.2, hills: 0, peaks: 0, tint: '#e8f2ff', tintAmt: 0.2, ground: '#ffffff' };
   const ZMIX_GARDEN = { a: 'garden', b: 'garden', k: 0 };
   // which two zones you are between at distance d, and how far through the change (a tunnel at each checkpoint)
   function zoneMixAt(d) {
@@ -14838,11 +14843,12 @@
       if (next === 'mountain' && !NAT.peaks) zq.push(peaksRing);
     }
     pumpZones();
-    airFrame();
+    airFrame(dt);
   }
   function zoneLeave() {
     view.eye = RUN.eye;
     view.roll = 0;
+    view.fovK = 1;
     if (AIR.floor) AIR.floor.visible = false;
     SPL.list.forEach((s) => {
       if (s.m.parent) s.m.parent.remove(s.m);
@@ -17679,16 +17685,14 @@
       sciB: slabM('#ffb27a', 0.3),
       head: slabM('#2fcf8a', 0.32),
     };
-    // edges darker than the bright sky behind, so the glass reads against it
-    AIR.m.rim = new THREE.MeshBasicMaterial({ color: '#3f8fb4', transparent: true, opacity: 0.85, toneMapped: false });
-    AIR.m.thickRim = new THREE.MeshBasicMaterial({ color: '#1f8f80', transparent: true, opacity: 0.85, toneMapped: false });
+    // bright edges against the deep blue: the glass is what you see up there
+    AIR.m.rim = new THREE.MeshBasicMaterial({ color: '#e8fdff', transparent: true, opacity: 0.95, toneMapped: false });
+    AIR.m.thickRim = new THREE.MeshBasicMaterial({ color: '#8ff7e4', transparent: true, opacity: 0.95, toneMapped: false });
     AIR.m.hub = new THREE.MeshPhysicalMaterial({ color: '#ffe7a3', emissive: '#ffb03a', emissiveIntensity: 0.6, roughness: 0.05, transparent: true, opacity: 0.9, clearcoat: 1, envMapIntensity: 1.6 });
     AIR.m.bird = new THREE.MeshPhysicalMaterial({ color: '#fff0c4', emissive: '#ffb84d', emissiveIntensity: 0.4, roughness: 0.05, transparent: true, opacity: 0.88, clearcoat: 1, flatShading: true, envMapIntensity: 1.6, side: THREE.DoubleSide });
     AIR.m.eye = new THREE.MeshBasicMaterial({ color: '#ff6a3d', toneMapped: false });
     AIR.m.ring = new THREE.MeshBasicMaterial({ color: '#fff1b0', transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false });
     AIR.m.bolt = new THREE.MeshBasicMaterial({ color: '#eaf6ff', transparent: true, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-    AIR.m.cloud = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#c6d6e6', emissiveIntensity: 0.22 });
-    AIR.m.storm = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#6a7590', emissiveIntensity: 0.5 });
     AIR.ringGeo = share(new THREE.TorusGeometry(1.25, 0.055, 6, 40));
     AIR.hubGeo = share(new THREE.SphereGeometry(0.28, 20, 14));
     AIR.eyeGeo = share(new THREE.SphereGeometry(0.075, 10, 8));
@@ -17700,89 +17704,64 @@
       return share(g);
     };
     AIR.wingGeo = [wing(1), wing(-1)];
-    AIR.lump = new THREE.SphereGeometry(1, 9, 6);
     return AIR;
   }
 
-  // ---- clouds: puffy lumps, white on top and blue-grey underneath ----
-  const _aTop = new THREE.Color('#ffffff');
-  const _aBot = new THREE.Color('#bccbdc');
-  const _acl = new THREE.Color();
-  function airCluster(geos, r, cx, cy, cz, size, o = {}) {
-    const n = o.n || 4 + Math.floor(r() * 4);
-    const top = o.top || _aTop;
-    const bot = o.bot || _aBot;
-    for (let i = 0; i < n; i++) {
-      const s = size * (0.45 + r() * 0.55) * (i === 0 ? 1.2 : 1);
-      const g = AIR.lump.clone();
-      g.scale(s * (1.15 + r() * 0.5), s * (o.flat || 0.62) * (0.8 + r() * 0.4), s * (0.9 + r() * 0.4));
-      g.translate(cx + (r() - 0.5) * size * 1.9, cy + (r() - 0.35) * size * 0.4, cz + (r() - 0.5) * size * 1.1);
-      // never in the way: a lump that would reach the line you fly along is left out
-      if (o.avoid) {
-        g.computeBoundingBox();
-        if (o.avoid(g.boundingBox)) {
-          g.dispose();
-          continue;
-        }
-      }
-      const p = g.attributes.position;
-      const col = new Float32Array(p.count * 3);
-      for (let j = 0; j < p.count; j++) {
-        _acl.copy(bot).lerp(top, airSm((p.getY(j) - (cy - size * 0.5)) / size));
-        col[j * 3] = _acl.r;
-        col[j * 3 + 1] = _acl.g;
-        col[j * 3 + 2] = _acl.b;
-      }
-      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-      geos.push(g);
-    }
-  }
-  function airMerge(geos) {
-    const g = mergeGeometries(geos, false);
-    geos.forEach((x) => x.dispose());
-    g.computeBoundingSphere();
-    return share(g);
-  }
-  // three ready-made skies of clouds for a 24 m piece, and the clouds you pass going up and coming down
+  // ---- clouds: only a few soft ones, far off to the sides (and the dark one of a storm) ----
   function airTemplates() {
-    if (AIR.tpl) return;
+    if (AIR.puffTex) return;
     airMats();
-    const X = RUN.X;
-    const few = gfxTier() === 'low' ? 0.6 : 1;
-    const lane = (b, y0, y1, w) => b.min.x < X + w && b.max.x > X - w && b.min.y < y1 && b.max.y > y0;
-    AIR.tpl = [0, 1, 2].map((v) => {
-      const r = makeRng(900 + v * 37);
-      const geos = [];
-      const sd = () => (r() < 0.5 ? -1 : 1);
-      const avoid = (b) => lane(b, AIR.ALT - 3, AIR.ALT + 6, 3.4);
-      // wide flat banks lying on the cloud floor
-      for (let i = 0; i < Math.round(4 * few); i++) airCluster(geos, r, X + sd() * (6 + r() * 34), AIR.FLOOR + 0.5 + r() * 1.5, -r() * 24, 6 + r() * 4, { flat: 0.4, avoid });
-      // clouds level with you, further out
-      for (let i = 0; i < Math.round(4 * few); i++) airCluster(geos, r, X + sd() * (12 + r() * 40), AIR.ALT - 4 + r() * 10, -r() * 24, 3 + r() * 3.5, { avoid });
-      // high ones
-      for (let i = 0; i < 2; i++) airCluster(geos, r, X + sd() * (14 + r() * 40), AIR.ALT + 10 + r() * 9, -r() * 24, 4 + r() * 3, { flat: 0.5, avoid });
-      // little wisps close by, so you feel the speed
-      for (let i = 0; i < 2; i++) airCluster(geos, r, X + sd() * (6 + r() * 2), AIR.ALT - 1.5 + r() * 5, -r() * 24, 0.6 + r() * 0.4, { n: 3, avoid });
-      return airMerge(geos);
-    });
-    {
-      const r = makeRng(977);
-      const geos = [];
-      for (let i = 0; i < 8; i++) airCluster(geos, r, X + (i % 2 ? 1 : -1) * (7 + r() * 14), 7 + r() * 12, -r() * 24, 2.5 + r() * 3, { avoid: (b) => lane(b, -2, AIR.ALT + 5, 3.6) });
-      AIR.liftTpl = airMerge(geos);
+    const S = 128;
+    const c = cv(S, S);
+    const g = c.getContext('2d');
+    const r = makeRng(31);
+    for (let i = 0; i < 9; i++) {
+      const x = S * (0.25 + r() * 0.5);
+      const y = S * (0.42 + r() * 0.2);
+      const rad = S * (0.14 + r() * 0.16);
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, 'rgba(255,255,255,0.5)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, S, S);
     }
-    {
-      const r = makeRng(31);
-      const geos = [];
-      airCluster(geos, r, 0, 0, 0, 1.1, { n: 5 });
-      AIR.puffGeo = airMerge(geos);
-    }
-    AIR.stormGeo = [0, 1].map((v) => {
-      const r = makeRng(55 + v);
-      const geos = [];
-      airCluster(geos, r, 0, 0, 0, 2.6, { n: 8, top: new THREE.Color('#d2d8e4'), bot: new THREE.Color('#8790a6'), flat: 0.55 });
-      return airMerge(geos);
-    });
+    AIR.puffTex = new THREE.CanvasTexture(c);
+    AIR.m.puff = new THREE.SpriteMaterial({ map: AIR.puffTex, color: '#ffffff', transparent: true, depthWrite: false, opacity: 0.85 });
+    AIR.m.storm = new THREE.SpriteMaterial({ map: AIR.puffTex, color: '#4b5470', transparent: true, depthWrite: false, opacity: 1 });
+  }
+  function airPuff(parent, m, x, y, z, w, h) {
+    const sp = new THREE.Sprite(m);
+    SHARED.add(sp.geometry);
+    sp.position.set(x, y, z);
+    sp.scale.set(w, h, 1);
+    sp.userData.noHit = true;
+    sp.raycast = nNoRay;
+    parent.add(sp);
+    return sp;
+  }
+  // thin streaks rushing past, so you feel the speed up there
+  function airLines() {
+    if (AIR.lines) return AIR.lines;
+    const N = 34;
+    const pos = new Float32Array(N * 6);
+    AIR.lineData = [];
+    for (let i = 0; i < N; i++) AIR.lineData.push({ a: Math.random() * 6.28, r: 1.5 + Math.random() * 3, z: -Math.random() * 40, len: 1.2 + Math.random() * 1.6 });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const m = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false }));
+    m.frustumCulled = false;
+    m.userData.noHit = true;
+    m.raycast = nNoRay;
+    m.visible = false;
+    scene.add(m);
+    AIR.lines = m;
+    return m;
+  }
+  // a soft swish as you go through where the glass was
+  function airSwish() {
+    if (!canPlay()) return;
+    const t = actx.currentTime;
+    noise(t, 0.22, 'bandpass', 2400, 0.1, 0.9).frequency.exponentialRampToValueAtTime(520, t + 0.2);
   }
   // the sea of cloud below you: one big sheet that comes along with you, only seen from above
   function airFloor() {
@@ -17792,8 +17771,8 @@
     const c = cv(S, S);
     const g = c.getContext('2d');
     const img = g.createImageData(S, S);
-    const hi = [255, 255, 255];
-    const lo = [170, 190, 212];
+    const hi = [214, 228, 246];
+    const lo = [96, 128, 176];
     for (let y = 0; y < S; y++) {
       for (let x = 0; x < S; x++) {
         const v = nFbm((x / S) * 5, (y / S) * 5, 71, 4, 5);
@@ -17806,7 +17785,7 @@
     g.putImageData(img, 0, 0);
     const m = new THREE.Mesh(
       share(new THREE.PlaneGeometry(480, 480).rotateX(-Math.PI / 2)),
-      new THREE.MeshLambertMaterial({ map: texOf(c, { srgb: true, repeat: [12, 12] }), transparent: true, opacity: 0, depthWrite: false, emissive: '#c8d8e8', emissiveIntensity: 0.2 }),
+      new THREE.MeshLambertMaterial({ map: texOf(c, { srgb: true, repeat: [12, 12] }), transparent: true, opacity: 0, depthWrite: false, emissive: '#9fb8d8', emissiveIntensity: 0.15 }),
     );
     m.renderOrder = -1;
     m.frustumCulled = false;
@@ -17818,9 +17797,33 @@
     return m;
   }
   // each frame: the cloud floor fades in once you are above it, and what is on the ground below is not drawn
-  function airFrame() {
+  function airFrame(dt = 1 / 60) {
     const f = AIR.floor;
     if (!f) return;
+    // the streaks
+    const L = airLines();
+    const lk = currentRoom === 'run' && gameState === 'play' && !reduceMotion ? airK(RUN.z0 - run.z) : 0;
+    L.visible = lk > 0.05;
+    if (L.visible) {
+      const p = L.geometry.attributes.position.array;
+      const sp = (run.v + 2) * 1.6 * dt;
+      AIR.lineData.forEach((q, i) => {
+        q.z += sp;
+        if (q.z > 2) {
+          q.z -= 40;
+          q.a = Math.random() * 6.28;
+        }
+        const x = Math.cos(q.a) * q.r;
+        const y = Math.sin(q.a) * q.r;
+        p.set([x, y, q.z, x, y, q.z - q.len], i * 6);
+      });
+      L.geometry.attributes.position.needsUpdate = true;
+      L.material.opacity = 0.35 * lk;
+      L.position.copy(camera.position);
+      L.quaternion.copy(camera.quaternion);
+    }
+    // far things are not blurred up there: the glass stays sharp all the way
+    if (post && post.dof) post.dof.material.uniforms.uFocus.value = 34 + 400 * lk;
     const cy = camera.position.y;
     const k = currentRoom === 'run' ? airSm((cy - AIR.FLOOR - 0.6) / 5) : 0;
     f.visible = k > 0.01;
@@ -17829,9 +17832,8 @@
     const nt = skyUniforms.uNight.value;
     if (AIR.m && AIR.nightK !== nt) {
       AIR.nightK = nt;
-      AIR.m.cloud.emissiveIntensity = 0.22 * (1 - 0.75 * nt);
-      AIR.m.storm.emissiveIntensity = 0.5 * (1 - 0.6 * nt);
-      f.material.emissiveIntensity = 0.2 * (1 - 0.75 * nt);
+      if (AIR.m.puff) AIR.m.puff.color.setScalar(1 - 0.6 * nt);
+      f.material.emissiveIntensity = 0.15 * (1 - 0.75 * nt);
     }
     for (const ch of run.chunks) {
       if (hide && !ch.sky) ch.group.visible = false;
@@ -17856,7 +17858,14 @@
         x.raycast = nNoRay;
         grp.add(x);
       };
-      add(AIR.puffGeo, AIR.m.cloud);
+      const sp = new THREE.Sprite(AIR.m.puff);
+      SHARED.add(sp.geometry);
+      sp.scale.setScalar(1e-5);
+      sp.frustumCulled = false;
+      sp.userData.noHit = true;
+      sp.raycast = nNoRay;
+      grp.add(sp);
+      airLines();
       add(AIR.ringGeo, AIR.m.ring);
       add(AIR.birdGeo, AIR.m.bird);
       add(AIR.hubGeo, AIR.m.hub);
@@ -17886,10 +17895,9 @@
       ch.below.push(gm);
     }
     if (plan.part === 'body') {
-      const m = new THREE.Mesh(AIR.tpl[ch.k % 3], AIR.m.cloud);
-      m.userData.noHit = true;
-      m.raycast = nNoRay;
-      ch.group.add(m);
+      // a couple of soft clouds far out to the sides, low over the cloud floor
+      const r = makeRng(ch.k * 7 + 3);
+      for (const sd of [-1, 1]) if (r() < 0.75) airPuff(ch.group, AIR.m.puff, RUN.X + sd * (30 + r() * 30), AIR.FLOOR + 3 + r() * 6, -r() * 24, 30 + r() * 16, 10 + r() * 5);
       return;
     }
     const pm = new THREE.Mesh(RM.pathGeo, zone === 'river' ? riverMats().path : zone === 'garden' && gfxTier() !== 'low' ? gardenPathMat() : NAT.path[zone] || RM.path);
@@ -17916,12 +17924,6 @@
     airFloor();
     const o = plan.o;
     const at = (dz) => z - dz;
-    if (o === 1 || o === 9) {
-      const m = new THREE.Mesh(AIR.liftTpl, AIR.m.cloud);
-      m.userData.noHit = true;
-      m.raycast = nNoRay;
-      ch.group.add(m);
-    }
     if (plan.part === 'lift') {
       // rings all the way up the climb
       (o === 0 ? [10, 18] : [3, 10, 17]).forEach((dz) => airRing(ch, at(dz)));
@@ -18204,11 +18206,14 @@
     chain.userData.noHit = true;
     chain.castShadow = false;
     rec.mesh.add(chain);
-    const cl = new THREE.Mesh(AIR.puffGeo, AIR.m.cloud);
-    cl.position.set(hinge.x, hinge.y + 0.35, z - ch.z);
-    cl.userData.noHit = true;
-    cl.raycast = nNoRay;
-    ch.group.add(cl);
+    const up = put(GXR.cordGeo, M.brass, hinge.x, hinge.y + 15, z - ch.z, ch.group);
+    up.scale.set(3.2, 30, 3.2);
+    up.userData.noHit = true;
+    up.castShadow = false;
+    const ring = put(AIR.ringGeo, M.brass, hinge.x, hinge.y, z - ch.z, ch.group);
+    ring.scale.setScalar(0.09);
+    ring.userData.noHit = true;
+    ring.castShadow = false;
     const amp = 0.58;
     const w = 1.35 + Math.min(n, 3) * 0.06;
     const ph = Math.random() * 6.28;
@@ -18269,11 +18274,7 @@
     (ch.mats = ch.mats || []).push(m);
     const rec = airPane(ch, g, 'mid', [[-1.74, 0.05], [1.74, 0.05], [1.74, 2.95], [-1.74, 2.95]], z, A, { mat: m });
     const cx = RUN.X + side * 0.5;
-    const cl = new THREE.Mesh(AIR.stormGeo[Math.random() < 0.5 ? 0 : 1], AIR.m.storm);
-    cl.position.set(cx, A + 5.6, z - ch.z - 1.2);
-    cl.userData.noHit = true;
-    cl.raycast = nNoRay;
-    ch.group.add(cl);
+    for (let i = 0; i < 4; i++) airPuff(ch.group, AIR.m.storm, cx + (i - 1.5) * 1.6, A + 5.4 + Math.sin(i * 2.1) * 0.4, z - ch.z - 1.2 - i * 0.2, 6.5, 3.6);
     const S = { on: false, next: 0 };
     const base = m.emissive.clone();
     const hot = new THREE.Color('#9fd6ff');
@@ -18286,6 +18287,7 @@
       const c = clamp((near + 15 - (run.z - z)) / 15, 0, 1);
       m.emissive.copy(base).lerp(hot, c);
       m.emissiveIntensity = 0.22 + c * (0.9 + 0.3 * Math.sin(T * 47));
+      AIR.m.storm.color.set('#4b5470').lerp(hot, c * (Math.random() < 0.15 ? 0.8 : 0.1));
       if (c > 0.05 && T > S.next) {
         S.next = T + 0.5 - c * 0.38;
         airZap(c);
