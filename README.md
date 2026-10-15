@@ -4,6 +4,7 @@ A calm, stress-relief glass-breaking game, made with three.js (r170) and cannon-
 
 - **Free play:** four cosy rooms full of glass to break with a slingshot, ball, hammer or an earthquake. Rewind puts every piece back.
 - **Glass Run:** an endless path through a garden, a jungle, the mountains and along a river. Each zone has its own glass, and a glass pavilion comes down in slow motion before every checkpoint.
+- **The sky:** after each pavilion the path lifts off into the clouds. Up there the glass moves: a spinning glass fan, glass scissors, a swinging lens, a glass serpent, a storm cloud charging a pane, flocks of glass birds, rings to fly through, and walls of thin and thick glass (thick takes two or three hits). Each sky ends with a great turning glass wheel, then a dive back down into the next zone.
 
 ## Android app
 
@@ -11,6 +12,8 @@ Every push to `main` builds an APK on GitHub (see **Actions → Android APK**).
 The newest one is always on the [latest release](../../releases/tag/latest): download `KaanchKaKamra.apk` on your phone and open it to install (allow installing from your browser when Android asks).
 
 The app has the game and its libraries inside, so it works offline.
+
+If the download does not start, open the release link in Chrome itself (not inside another app's built-in browser), choose **Download anyway** if Chrome warns about the file, and **Install anyway** if Play Protect asks: it is a debug build, so Android does not know it yet.
 
 ## Play in the browser
 

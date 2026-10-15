@@ -676,6 +676,7 @@
       <li><b>Aim and shoot.</b> Tap the glass to fire the slingshot. Hold to keep firing. Drag to look around.</li>
       <li><b>Free play.</b> Walk with the stick (or WASD), switch to the ball, the hammer or an earthquake on the right. Nothing is lost: <b>Rewind</b> puts every piece back.</li>
       <li><b>Glass Run.</b> The path moves on its own. Break the glass in your way before you reach it, hit the glowing gems for pebbles, and keep a streak going for double and triple shots.</li>
+      <li><b>The sky.</b> After each pavilion you fly up into the clouds. Up there the glass moves: shoot the glowing hub of a spinning fan, break the scissors before they shut, the serpent's head, the pane a storm cloud is charging. Thick green glass takes two or three hits. Fly through the rings for pebbles and speed.</li>
       <li><b>Checkpoints.</b> Bring down the glass pavilion before each checkpoint for a slow-motion finish and ten pebbles. If you run out, carry on from your last checkpoint.</li>
       <li><b>Breathe mode.</b> Turn it on in the pause menu. Hold your finger down and breathe in as the ring grows, then let go to breathe out and break the glass.</li>
     </ol>
@@ -6962,7 +6963,7 @@
     else walk(dt);
     const breath = reduceMotion ? 0 : Math.sin(t * 1.25) * 0.0035;
     camera.position.set(view.x, view.eye + breath + view.bob, view.z);
-    camera.rotation.set(view.pitch, view.yaw, 0, 'YXZ');
+    camera.rotation.set(view.pitch, view.yaw, view.roll || 0, 'YXZ');
   }
 
   // The hint fades a few seconds after the first touch
@@ -11162,8 +11163,15 @@
       P.rest = false;
       return { kind: 'checkpoint', dist: cp };
     }
-    // just before a checkpoint: the glass pavilion
-    if (cp >= d1 && cp < d1 + RUN.L) return { kind: 'finale' };
+    // before each checkpoint the path flies up into the sky; the glass pavilion stands just before the climb
+    const ar = airRole(Math.round(d0 / RUN.L));
+    if (ar && ar.part === 'pavilion') return { kind: 'finale' };
+    if (ar) {
+      const AP = airPlanFor(ar.n);
+      const body = ar.o >= 3 && ar.o <= 7;
+      const main = body ? AP.order[ar.o - 3] : null;
+      return { kind: 'sky', n: ar.n, o: ar.o, part: ar.part, main, extra: body ? AP.extras[ar.o - 3] : null, variant: ar.o + (main ? ':' + main : '') };
+    }
     // a breather after each phrase
     if (P.rest && !P.intro.length) {
       P.rest = false;
@@ -11460,7 +11468,8 @@
     const plan = planChunk(d0);
     const ch = { k, z, group, recs: [], bodies: [], gates: [], cp: null, zone: zoneAt(d0 + RUN.L - 0.01), from: zoneAt(d0), tunnel: false, gorge: false };
     // the ground, the path and everything growing beside it, for this zone (a tunnel where one zone becomes the next)
-    zoneChunk(ch, plan);
+    if (plan.kind === 'sky') airChunk(ch, plan);
+    else zoneChunk(ch, plan);
     const zm = z - RUN.L / 2;
     if (plan.kind === 'start') {
       gemRow(ch, z - 6);
@@ -11472,6 +11481,8 @@
     } else if (plan.kind === 'finale') {
       gemRow(ch, z - 3);
       buildFinale(ch, zm - 3);
+    } else if (plan.kind === 'sky') {
+      airContent(ch, plan, z);
     } else if (plan.kind === 'rest') {
       gemArc(ch, zm);
       if (ch.zone === 'river' && plan.variant !== 2) glassBridge(ch, zm + 5);
@@ -11524,6 +11535,7 @@
       if (i >= 0) run.gates.splice(i, 1);
     });
     room.remove(ch.group);
+    if (ch.mats) ch.mats.forEach((m) => m.dispose());
     ch.group.traverse((o) => {
       if (o.geometry && !SHARED.has(o.geometry)) o.geometry.dispose();
       if (o.userData.ownTex) {
@@ -11605,6 +11617,7 @@
     Object.assign(run, { phase: 'ready', t: 0, z: RUN.z0 - startD, v: 0, ammo: RUN.ammo, streak: 0, multi: 1, gates: [], gems: [], chunks: [], floaters: [], end: 0, out: 0, shown: {}, said: false, d0: startD, broken0: 0, crashes: 0, crashLog: [], crashT: -1 });
     run.next = Math.floor(startD / RUN.L);
     planReset(run.next * RUN.L);
+    airReset();
     // a lamp that goes along with you (it matters at night)
     lamp = new THREE.PointLight('#ffe2b8', 3.2, 16, 1.4);
     lamp.userData.gain = 0.7;
@@ -11776,6 +11789,15 @@
     view.z = run.z;
     view.yaw = Math.sin(run.z * 0.13) * 0.012;
     view.pitch = -0.035 - 0.21 * bridgeLook();
+    const ad = RUN.z0 - run.z;
+    const alt = airAlt(ad);
+    view.eye = RUN.eye + alt;
+    if (alt > 0 || view.roll) {
+      const ak = airK(ad);
+      view.pitch += Math.atan((airAlt(ad + 1.5) - airAlt(ad - 1.5)) / 3) * 0.5;
+      view.yaw += ak * Math.sin(ad * 0.05) * 0.02;
+      view.roll = reduceMotion ? 0 : ak * 0.045 * Math.cos(ad * 0.0935);
+    }
     view.vyaw = view.vpitch = 0;
     view.bob = reduceMotion || run.phase !== 'go' ? 0 : Math.sin(run.z * 2.4) * 0.008;
   }
@@ -11785,7 +11807,7 @@
     run.crashes = (run.crashes || 0) + 1;
     run.crashLog = run.crashLog || [];
     run.crashLog.push(g.type);
-    _rc.set(view.x, RUN.eye, view.z - 0.3);
+    _rc.set(view.x, runEye(), view.z - 0.3);
     blockers.forEach((rec) => shatter(rec, _rc.clone().setX(clamp(_rc.x, rec.box.min.x, rec.box.max.x)), V3(0, 0, -1), false, { kind: 'wreck' }));
     if (g.lock && !g.lock.open) openLock(g, true);
     run.ammo = Math.max(0, run.ammo - 10);
@@ -11811,11 +11833,12 @@
       const gg = rec.mesh.geometry;
       if (!gg.boundingBox) gg.computeBoundingBox();
       _rbb.copy(gg.boundingBox).applyMatrix4(rec.mesh.matrixWorld);
-      return view.x > _rbb.min.x - 0.18 && view.x < _rbb.max.x + 0.18 && RUN.eye > _rbb.min.y - 0.15 && RUN.eye < _rbb.max.y + 0.15;
+      const ey = runEye();
+      return view.x > _rbb.min.x - 0.18 && view.x < _rbb.max.x + 0.18 && ey > _rbb.min.y - 0.15 && ey < _rbb.max.y + 0.15;
     }
     const S = rec.sheet.slab;
     rec.mesh.updateMatrixWorld(true);
-    _rb.set(view.x, RUN.eye, rec.mesh.position.z).applyMatrix4(_rbInv.copy(rec.mesh.matrixWorld).invert());
+    _rb.set(view.x, runEye(), rec.mesh.position.z).applyMatrix4(_rbInv.copy(rec.mesh.matrixWorld).invert());
     const x = _rb.dot(S.u);
     const y = _rb.dot(S.v);
     const xs = S.poly.map((q) => q[0]);
@@ -11824,9 +11847,10 @@
   }
   function updateRun(dt) {
     if (currentRoom !== 'run') return;
-    if (lamp) lamp.position.set(RUN.X, 2.6, run.z - 3);
-    rainMesh.position.set(0, 0, run.z - 0.45 - 1);
-    rainGH.position.set(0, 0, run.z - 14);
+    const airA = airAlt(RUN.z0 - run.z);
+    if (lamp) lamp.position.set(RUN.X, 2.6 + airA, run.z - 3);
+    rainMesh.position.set(0, airA, run.z - 0.45 - 1);
+    rainGH.position.set(0, airA, run.z - 14);
     // the lawn and the far hills come along
     ground.position.z = Math.round(run.z / 2.5) * 2.5;
     hillMeshes.forEach((m) => { m.position.z = run.z; });
@@ -11865,6 +11889,7 @@
     const d = RUN.z0 - run.z;
     // a little faster each time round the zones
     let want = 3.6 + Math.min(3.4, d * 0.0017) + Math.min(1.2, Math.floor(cpIndexAt(d) / ZONES.length) * 0.4);
+    want += airBoost();
     if (run.phase === 'out') want = 0;
     run.v += (want - run.v) * (1 - Math.exp(-dt * (want ? 2.5 : 1.6)));
     const prev = run.z;
@@ -11873,9 +11898,10 @@
     for (const g of run.gates) {
       if (g.done || !(prev > g.z + 0.45 && run.z <= g.z + 0.45)) continue;
       g.done = true;
-      const blockers = g.recs.filter((rec) => !rec.broken && !rec.dynamic && !rec.falling && !(rec.sheet && rec.sheet.falling) && runBlocks(rec));
+      const blockers = g.recs.filter((rec) => !rec.broken && !rec.dynamic && !rec.falling && !rec.noBlock && !(rec.sheet && rec.sheet.falling) && runBlocks(rec));
       if (blockers.length || (g.lock && !g.lock.open)) runCrash(g, blockers);
     }
+    airPass(prev);
     // checkpoints
     for (const ch of run.chunks) {
       if (!ch.cp || ch.cp.passed || run.z > ch.cp.z) continue;
@@ -14341,9 +14367,13 @@
     river: { dap: 0.32, fog: '#cddde4', hzMix: 0.35, fogAmt: 0.55, near: 25, far: 190, sky: 0.22, zen: '#4f8fd0', zenAmt: 0.15, hemiK: 1.0, sunK: 1.0, envK: 1.05, expo: 0, cover: -0.05, hills: 1, peaks: 0, tint: '#e6f2ff', tintAmt: 0.25, ground: '#ffffff' },
     mountain: { dap: 0.12, fog: '#c6d4e2', hzMix: 0.35, fogAmt: 0.85, near: 30, far: 210, sky: 0.28, zen: '#3c79d0', zenAmt: 0.35, hemiK: 1.05, sunK: 1.0, envK: 1.1, expo: 0, cover: -0.12, hills: 0, peaks: 1, tint: '#d6e4ff', tintAmt: 0.5, ground: '#8f8f8a' },
   };
+  ZONE_LOOK.skyRun = { dap: 0, fog: '#d6e7f5', hzMix: 0.3, fogAmt: 0.55, near: 45, far: 260, sky: 0.04, zen: '#3d86e8', zenAmt: 0.35, hemiK: 1.15, sunK: 1.35, envK: 1.0, expo: 0.06, cover: -0.05, hills: 0, peaks: 0, tint: '#ffffff', tintAmt: 0.2, ground: '#ffffff', warm: 0.3, fillK: 1.4 };
+  ZONE_LOOK.sky = { dap: 0, fog: '#d6e7f5', hzMix: 0.3, fogAmt: 0.5, near: 45, far: 250, sky: 0.04, zen: '#4a8fe0', zenAmt: 0.3, hemiK: 1.1, sunK: 1.2, envK: 1.0, expo: 0.04, cover: -0.05, hills: 0, peaks: 0, tint: '#ffffff', tintAmt: 0.2, ground: '#ffffff' };
   const ZMIX_GARDEN = { a: 'garden', b: 'garden', k: 0 };
   // which two zones you are between at distance d, and how far through the change (a tunnel at each checkpoint)
   function zoneMixAt(d) {
+    const ak = airK(d);
+    if (ak > 0) return { a: zoneAt(d), b: 'sky', k: ak };
     let n = 0;
     while (CPS(n) <= d - 6) n++;
     const c = CPS(n);
@@ -14673,6 +14703,15 @@
       ambLfo(f2.frequency, 0.05, 380);
       ambLfo(v2.gain, 0.13, 0.018);
     }
+    {
+      // the sky: wind rushing past
+      const zg = zoneGain('sky');
+      const f = filt('bandpass', 700, 0.6);
+      const v = gain(0.16);
+      noiseSrc(1.0).connect(f).connect(v).connect(zg);
+      ambLfo(f.frequency, 0.13, 300);
+      ambLfo(v.gain, 0.21, 0.07);
+    }
   }
   function ambStop() {
     if (!AMB.on) return;
@@ -14751,7 +14790,7 @@
   function ambUpdate(m) {
     if (!AMB.on) return;
     const t = actx.currentTime;
-    for (const z of ['garden', 'jungle', 'mountain', 'river']) if (AMB.g[z]) AMB.g[z].gain.setTargetAtTime(zoneW(m, z), t, 0.7);
+    for (const z of ['garden', 'jungle', 'mountain', 'river', 'sky']) if (AMB.g[z]) AMB.g[z].gain.setTargetAtTime(zoneW(m, z), t, 0.7);
     if (clockNow < AMB.nextBird) return;
     const night = skyUniforms.uNight.value;
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -14799,8 +14838,12 @@
       if (next === 'mountain' && !NAT.peaks) zq.push(peaksRing);
     }
     pumpZones();
+    airFrame();
   }
   function zoneLeave() {
+    view.eye = RUN.eye;
+    view.roll = 0;
+    if (AIR.floor) AIR.floor.visible = false;
     SPL.list.forEach((s) => {
       if (s.m.parent) s.m.parent.remove(s.m);
       SPL.pool.push(s.m);
@@ -17465,9 +17508,11 @@
     }
     GXR.warmMesh.position.set(RUN.X, 1.5, run.z - 3);
     scene.add(GXR.warmMesh);
+    airWarm();
   }
   function coolRunGlass() {
     if (GXR.warmMesh && GXR.warmMesh.parent) GXR.warmMesh.parent.remove(GXR.warmMesh);
+    if (AIR.warm && AIR.warm.parent) AIR.warm.parent.remove(AIR.warm);
   }
 
   // =====================================================================
@@ -17539,6 +17584,928 @@
   // phones draw a smaller shadow map
   if (coarse) sun.shadow.mapSize.set(1024, 1024);
   for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'touchstart']) window.addEventListener(ev, markActive, { passive: true, capture: true });
+
+  // =====================================================================
+  // The sky. After each zone's glass pavilion the path lifts off into the clouds, and up there the glass
+  // moves: a spinning glass fan, glass scissors closing on you, a heavy lens swinging on a chain, a glass
+  // serpent, a storm cloud charging a pane, flocks of glass birds, rings to fly through, and walls of glass
+  // thin and thick. At the end a great turning glass wheel; then a dive back down and on into the next zone.
+  // No trees and no leaves up here: it is the lightest part of the run to draw.
+  // =====================================================================
+  const AIR = { ALT: 20, FLOOR: 12, ready: false, rings: [], boostT: -9, combo: 0, comboT: -9 };
+  const airSm = (x) => {
+    const k = clamp(x, 0, 1);
+    return k * k * (3 - 2 * k);
+  };
+  // where piece of path k sits in a sky stage: -1 the pavilion, 0-1 the climb, 2-8 the sky (8 the wheel), 9-10 the dive
+  function airRole(k) {
+    if (k < 8) return null;
+    const n = Math.floor((k - 8) / 25);
+    const o = k - (9 + 25 * n);
+    if (o < -1 || o > 10) return null;
+    return { n, o, part: o < 0 ? 'pavilion' : o < 2 ? 'lift' : o < 9 ? 'body' : 'dive' };
+  }
+  // how high above the path you fly at distance d (a climb of 48 m, 168 m of sky with gentle swoops, a dive of 48 m)
+  function airAlt(d) {
+    if (d <= 216) return 0;
+    const x = (d - 216) % 600;
+    if (x >= 264) return 0;
+    if (x < 48) return AIR.ALT * airSm(x / 48);
+    if (x > 216) return AIR.ALT * airSm((264 - x) / 48);
+    return AIR.ALT + 0.8 * Math.sin(((x - 48) / 168) * Math.PI * 5);
+  }
+  // how much of the sky's look there is at d (exactly 1 all through the sky, so the light is not redone every frame)
+  function airK(d) {
+    if (d <= 216) return 0;
+    const x = (d - 216) % 600;
+    if (x >= 264) return 0;
+    if (x < 48) return airSm(x / 48);
+    if (x > 216) return airSm((264 - x) / 48);
+    return 1;
+  }
+  const altAtZ = (z) => airAlt(RUN.z0 - z);
+  const runEye = () => RUN.eye + (currentRoom === 'run' ? airAlt(RUN.z0 - run.z) : 0);
+  const airBoost = () => {
+    if (currentRoom !== 'run') return 0;
+    const t = run.t - AIR.boostT;
+    return t >= 0 && t < 1.4 ? 1.8 * (1 - t / 1.4) : 0;
+  };
+  function airReset() {
+    AIR.rings = [];
+    AIR.boostT = -9;
+    AIR.combo = 0;
+    AIR.comboT = -9;
+  }
+  const airPick = (a) => a[Math.floor(Math.random() * a.length)];
+  function airShuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  // what each sky stage holds, in its own order
+  function airPlanFor(n) {
+    const P = run.plan;
+    if (!P.air || P.air.n !== n) {
+      P.air = {
+        n,
+        order: airShuffle(['blade', 'scissors', 'pendulum', 'serpent', 'storm']),
+        extras: airShuffle(n === 0 ? ['birds', 'rings', 'gems', 'wall', 'rings'] : ['wall', 'birds', 'wall', 'rings', 'gems']),
+      };
+    }
+    return P.air;
+  }
+
+  // ---- materials and shapes ----
+  function airMats() {
+    if (AIR.ready) return AIR;
+    AIR.ready = true;
+    runGlassMats();
+    const gb = { roughness: 0.05, metalness: 0, transparent: true, vertexColors: true, specularIntensity: 1, envMapIntensity: 1.5, clearcoat: quality.lite ? 0 : 1, side: THREE.DoubleSide, depthWrite: false };
+    const slabM = (c, e) => {
+      const m = new THREE.MeshPhysicalMaterial({ ...gb, color: c, emissive: c, emissiveIntensity: e });
+      m.userData.slab = true;
+      return m;
+    };
+    AIR.m = {
+      // glass from thin to very thick: thin is nearly clear, thick turns green-blue like a block of glass
+      thin: slabM('#cdf3ff', 0.2),
+      mid: slabM('#86d8f2', 0.26),
+      thick: slabM('#3fc9b2', 0.3),
+      slab: slabM('#178f7c', 0.32),
+      blade: slabM('#9fd2ff', 0.28),
+      sciA: slabM('#8cc8ff', 0.28),
+      sciB: slabM('#ffb27a', 0.3),
+      head: slabM('#2fcf8a', 0.32),
+    };
+    // edges darker than the bright sky behind, so the glass reads against it
+    AIR.m.rim = new THREE.MeshBasicMaterial({ color: '#3f8fb4', transparent: true, opacity: 0.85, toneMapped: false });
+    AIR.m.thickRim = new THREE.MeshBasicMaterial({ color: '#1f8f80', transparent: true, opacity: 0.85, toneMapped: false });
+    AIR.m.hub = new THREE.MeshPhysicalMaterial({ color: '#ffe7a3', emissive: '#ffb03a', emissiveIntensity: 0.6, roughness: 0.05, transparent: true, opacity: 0.9, clearcoat: 1, envMapIntensity: 1.6 });
+    AIR.m.bird = new THREE.MeshPhysicalMaterial({ color: '#fff0c4', emissive: '#ffb84d', emissiveIntensity: 0.4, roughness: 0.05, transparent: true, opacity: 0.88, clearcoat: 1, flatShading: true, envMapIntensity: 1.6, side: THREE.DoubleSide });
+    AIR.m.eye = new THREE.MeshBasicMaterial({ color: '#ff6a3d', toneMapped: false });
+    AIR.m.ring = new THREE.MeshBasicMaterial({ color: '#fff1b0', transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false });
+    AIR.m.bolt = new THREE.MeshBasicMaterial({ color: '#eaf6ff', transparent: true, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    AIR.m.cloud = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#c6d6e6', emissiveIntensity: 0.22 });
+    AIR.m.storm = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#6a7590', emissiveIntensity: 0.5 });
+    AIR.ringGeo = share(new THREE.TorusGeometry(1.25, 0.055, 6, 40));
+    AIR.hubGeo = share(new THREE.SphereGeometry(0.28, 20, 14));
+    AIR.eyeGeo = share(new THREE.SphereGeometry(0.075, 10, 8));
+    AIR.birdGeo = share(new THREE.OctahedronGeometry(0.1, 0).scale(2.9, 0.8, 0.95));
+    const wing = (s) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([0.13, 0, 0, -0.16, 0, 0, -0.06, 0, 0.46 * s], 3));
+      g.computeVertexNormals();
+      return share(g);
+    };
+    AIR.wingGeo = [wing(1), wing(-1)];
+    AIR.lump = new THREE.SphereGeometry(1, 9, 6);
+    return AIR;
+  }
+
+  // ---- clouds: puffy lumps, white on top and blue-grey underneath ----
+  const _aTop = new THREE.Color('#ffffff');
+  const _aBot = new THREE.Color('#bccbdc');
+  const _acl = new THREE.Color();
+  function airCluster(geos, r, cx, cy, cz, size, o = {}) {
+    const n = o.n || 4 + Math.floor(r() * 4);
+    const top = o.top || _aTop;
+    const bot = o.bot || _aBot;
+    for (let i = 0; i < n; i++) {
+      const s = size * (0.45 + r() * 0.55) * (i === 0 ? 1.2 : 1);
+      const g = AIR.lump.clone();
+      g.scale(s * (1.15 + r() * 0.5), s * (o.flat || 0.62) * (0.8 + r() * 0.4), s * (0.9 + r() * 0.4));
+      g.translate(cx + (r() - 0.5) * size * 1.9, cy + (r() - 0.35) * size * 0.4, cz + (r() - 0.5) * size * 1.1);
+      // never in the way: a lump that would reach the line you fly along is left out
+      if (o.avoid) {
+        g.computeBoundingBox();
+        if (o.avoid(g.boundingBox)) {
+          g.dispose();
+          continue;
+        }
+      }
+      const p = g.attributes.position;
+      const col = new Float32Array(p.count * 3);
+      for (let j = 0; j < p.count; j++) {
+        _acl.copy(bot).lerp(top, airSm((p.getY(j) - (cy - size * 0.5)) / size));
+        col[j * 3] = _acl.r;
+        col[j * 3 + 1] = _acl.g;
+        col[j * 3 + 2] = _acl.b;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geos.push(g);
+    }
+  }
+  function airMerge(geos) {
+    const g = mergeGeometries(geos, false);
+    geos.forEach((x) => x.dispose());
+    g.computeBoundingSphere();
+    return share(g);
+  }
+  // three ready-made skies of clouds for a 24 m piece, and the clouds you pass going up and coming down
+  function airTemplates() {
+    if (AIR.tpl) return;
+    airMats();
+    const X = RUN.X;
+    const few = gfxTier() === 'low' ? 0.6 : 1;
+    const lane = (b, y0, y1, w) => b.min.x < X + w && b.max.x > X - w && b.min.y < y1 && b.max.y > y0;
+    AIR.tpl = [0, 1, 2].map((v) => {
+      const r = makeRng(900 + v * 37);
+      const geos = [];
+      const sd = () => (r() < 0.5 ? -1 : 1);
+      const avoid = (b) => lane(b, AIR.ALT - 3, AIR.ALT + 6, 3.4);
+      // wide flat banks lying on the cloud floor
+      for (let i = 0; i < Math.round(4 * few); i++) airCluster(geos, r, X + sd() * (6 + r() * 34), AIR.FLOOR + 0.5 + r() * 1.5, -r() * 24, 6 + r() * 4, { flat: 0.4, avoid });
+      // clouds level with you, further out
+      for (let i = 0; i < Math.round(4 * few); i++) airCluster(geos, r, X + sd() * (12 + r() * 40), AIR.ALT - 4 + r() * 10, -r() * 24, 3 + r() * 3.5, { avoid });
+      // high ones
+      for (let i = 0; i < 2; i++) airCluster(geos, r, X + sd() * (14 + r() * 40), AIR.ALT + 10 + r() * 9, -r() * 24, 4 + r() * 3, { flat: 0.5, avoid });
+      // little wisps close by, so you feel the speed
+      for (let i = 0; i < 2; i++) airCluster(geos, r, X + sd() * (6 + r() * 2), AIR.ALT - 1.5 + r() * 5, -r() * 24, 0.6 + r() * 0.4, { n: 3, avoid });
+      return airMerge(geos);
+    });
+    {
+      const r = makeRng(977);
+      const geos = [];
+      for (let i = 0; i < 8; i++) airCluster(geos, r, X + (i % 2 ? 1 : -1) * (7 + r() * 14), 7 + r() * 12, -r() * 24, 2.5 + r() * 3, { avoid: (b) => lane(b, -2, AIR.ALT + 5, 3.6) });
+      AIR.liftTpl = airMerge(geos);
+    }
+    {
+      const r = makeRng(31);
+      const geos = [];
+      airCluster(geos, r, 0, 0, 0, 1.1, { n: 5 });
+      AIR.puffGeo = airMerge(geos);
+    }
+    AIR.stormGeo = [0, 1].map((v) => {
+      const r = makeRng(55 + v);
+      const geos = [];
+      airCluster(geos, r, 0, 0, 0, 2.6, { n: 8, top: new THREE.Color('#d2d8e4'), bot: new THREE.Color('#8790a6'), flat: 0.55 });
+      return airMerge(geos);
+    });
+  }
+  // the sea of cloud below you: one big sheet that comes along with you, only seen from above
+  function airFloor() {
+    if (AIR.floor) return AIR.floor;
+    airMats();
+    const S = 192;
+    const c = cv(S, S);
+    const g = c.getContext('2d');
+    const img = g.createImageData(S, S);
+    const hi = [255, 255, 255];
+    const lo = [170, 190, 212];
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        const v = nFbm((x / S) * 5, (y / S) * 5, 71, 4, 5);
+        const k = airSm((v - 0.3) / 0.42);
+        const i = (y * S + x) * 4;
+        for (let j = 0; j < 3; j++) img.data[i + j] = lo[j] + (hi[j] - lo[j]) * k;
+        img.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(img, 0, 0);
+    const m = new THREE.Mesh(
+      share(new THREE.PlaneGeometry(480, 480).rotateX(-Math.PI / 2)),
+      new THREE.MeshLambertMaterial({ map: texOf(c, { srgb: true, repeat: [12, 12] }), transparent: true, opacity: 0, depthWrite: false, emissive: '#c8d8e8', emissiveIntensity: 0.2 }),
+    );
+    m.renderOrder = -1;
+    m.frustumCulled = false;
+    m.userData.noHit = true;
+    m.raycast = nNoRay;
+    m.visible = false;
+    scene.add(m);
+    AIR.floor = m;
+    return m;
+  }
+  // each frame: the cloud floor fades in once you are above it, and what is on the ground below is not drawn
+  function airFrame() {
+    const f = AIR.floor;
+    if (!f) return;
+    const cy = camera.position.y;
+    const k = currentRoom === 'run' ? airSm((cy - AIR.FLOOR - 0.6) / 5) : 0;
+    f.visible = k > 0.01;
+    const hide = k > 0.999;
+    // the clouds' own soft glow dims at night
+    const nt = skyUniforms.uNight.value;
+    if (AIR.m && AIR.nightK !== nt) {
+      AIR.nightK = nt;
+      AIR.m.cloud.emissiveIntensity = 0.22 * (1 - 0.75 * nt);
+      AIR.m.storm.emissiveIntensity = 0.5 * (1 - 0.6 * nt);
+      f.material.emissiveIntensity = 0.2 * (1 - 0.75 * nt);
+    }
+    for (const ch of run.chunks) {
+      if (hide && !ch.sky) ch.group.visible = false;
+      if (ch.below) ch.below.forEach((m) => { m.visible = !hide; });
+    }
+    if (!f.visible) return;
+    f.material.opacity = k;
+    f.position.set(Math.round(camera.position.x / 40) * 40, AIR.FLOOR, Math.round(camera.position.z / 40) * 40);
+  }
+  // the new shaders are made at the start of the run, not when you first fly up
+  function airWarm() {
+    airMats();
+    airTemplates();
+    airFloor();
+    if (!AIR.warm) {
+      const grp = new THREE.Group();
+      const add = (geo, m) => {
+        const x = new THREE.Mesh(geo, m);
+        x.scale.setScalar(1e-5);
+        x.frustumCulled = false;
+        x.userData.noHit = true;
+        x.raycast = nNoRay;
+        grp.add(x);
+      };
+      add(AIR.puffGeo, AIR.m.cloud);
+      add(AIR.ringGeo, AIR.m.ring);
+      add(AIR.birdGeo, AIR.m.bird);
+      add(AIR.hubGeo, AIR.m.hub);
+      add(AIR.eyeGeo, AIR.m.eye);
+      add(AIR.wingGeo[0], AIR.m.bolt);
+      add(AIR.floor.geometry, AIR.floor.material);
+      AIR.warm = grp;
+    }
+    AIR.warm.position.set(RUN.X, 1.5, run.z - 3);
+    scene.add(AIR.warm);
+  }
+
+  // ---- a piece of the sky stage: clouds above the zone's ground (and, for the climb and the dive, an open
+  // field with lights along the path like a runway: no trees to fly through on the way up or down) ----
+  function airChunk(ch, plan) {
+    natMats();
+    airTemplates();
+    airFloor();
+    ch.sky = true;
+    ch.below = [];
+    const zone = ch.zone;
+    if (NAT.ground[zone]) {
+      const gm = new THREE.Mesh(NAT.groundGeo, NAT.ground[zone]);
+      gm.userData.noHit = true;
+      gm.raycast = nNoRay;
+      ch.group.add(gm);
+      ch.below.push(gm);
+    }
+    if (plan.part === 'body') {
+      const m = new THREE.Mesh(AIR.tpl[ch.k % 3], AIR.m.cloud);
+      m.userData.noHit = true;
+      m.raycast = nNoRay;
+      ch.group.add(m);
+      return;
+    }
+    const pm = new THREE.Mesh(RM.pathGeo, zone === 'river' ? riverMats().path : zone === 'garden' && gfxTier() !== 'low' ? gardenPathMat() : NAT.path[zone] || RM.path);
+    pm.receiveShadow = true;
+    pm.userData.surface = true;
+    ch.group.add(pm);
+    ch.below.push(pm);
+    ch.bodies.push(staticBox(60, 0.5, RUN.L / 2, RUN.X, GROUND_Y - 0.5, ch.z - RUN.L / 2));
+    // runway lights at the take-off and the landing
+    if (plan.o === 0 || plan.o === 10) {
+      for (let i = 0; i < 8; i++) {
+        for (const s of [-1, 1]) {
+          const sp = glowSprite(i % 2 ? '#ffd27a' : '#9fe8ff', i % 3, RUN.X + s * 1.95, 0.12, ch.z - 1.5 - i * 3, 0.45);
+          ch.group.attach(sp);
+          ch.below.push(sp);
+        }
+      }
+    }
+  }
+  // what is in it
+  function airContent(ch, plan, z) {
+    airMats();
+    airTemplates();
+    airFloor();
+    const o = plan.o;
+    const at = (dz) => z - dz;
+    if (o === 1 || o === 9) {
+      const m = new THREE.Mesh(AIR.liftTpl, AIR.m.cloud);
+      m.userData.noHit = true;
+      m.raycast = nNoRay;
+      ch.group.add(m);
+    }
+    if (plan.part === 'lift') {
+      // rings all the way up the climb
+      (o === 0 ? [10, 18] : [3, 10, 17]).forEach((dz) => airRing(ch, at(dz)));
+      if (o === 1) [-1.3, 1.3].forEach((x) => airGem(ch, x, 1.9, at(13.5)));
+    } else if (plan.part === 'dive') {
+      (o === 9 ? [4, 11, 18] : [3, 11]).forEach((dz) => airRing(ch, at(dz)));
+      if (o === 9) [-1.3, 1.3].forEach((x) => airGem(ch, x, 1.9, at(7.5)));
+    } else if (o === 2) {
+      airGate(ch, 'wall', at(4), plan.n);
+      [12, 15.5, 19].forEach((dz) => airRing(ch, at(dz)));
+      airBirds(ch, at(22), plan.n);
+    } else if (o === 8) {
+      airGems(ch, at(3));
+      airGate(ch, 'chakra', at(15), plan.n);
+    } else {
+      if (plan.extra === 'wall') airGate(ch, 'wall', at(3), plan.n);
+      else if (plan.extra === 'birds') airBirds(ch, at(5), plan.n);
+      else if (plan.extra === 'rings') [3, 7].forEach((dz) => airRing(ch, at(dz)));
+      else airGems(ch, at(4));
+      airGate(ch, plan.main || 'wall', at(16), plan.n);
+    }
+  }
+
+  // ---- rings to fly through: a pebble each, and three in a row give a burst of speed ----
+  function airRing(ch, z) {
+    airMats();
+    const d = RUN.z0 - z;
+    const m = new THREE.Mesh(AIR.ringGeo, AIR.m.ring);
+    m.position.set(RUN.X, RUN.eye + airAlt(d), z - ch.z);
+    // turned to face the way you are flying (up the climb, down the dive)
+    m.rotation.x = Math.atan((airAlt(d + 1) - airAlt(d - 1)) / 2);
+    m.userData.noHit = true;
+    m.raycast = nNoRay;
+    m.castShadow = false;
+    ch.group.add(m);
+    AIR.rings.push({ m, z, done: false });
+  }
+  function airRingGot(r) {
+    if (currentRoom !== 'run') return;
+    AIR.combo = run.t - AIR.comboT < 4 ? AIR.combo + 1 : 1;
+    AIR.comboT = run.t;
+    run.ammo += 1;
+    runPop('+1');
+    glassNote(AIR.combo + 2, 659.25);
+    if (AIR.combo >= 3) {
+      if (run.t - AIR.boostT > 1.2) sndWhoosh();
+      AIR.boostT = run.t;
+    }
+    runHud();
+    const m = r.m;
+    sparkle(m.getWorldPosition(new THREE.Vector3()), V3(0, 0, 1), 10);
+    let t = 0;
+    fx.push((dt) => {
+      t += dt;
+      const k = t / 0.3;
+      m.scale.setScalar(1 + k * 0.7);
+      if (k < 1 && m.parent) return true;
+      m.visible = false;
+      return false;
+    });
+  }
+  // called each frame of the run after you move: rings you went through, the lift-off and the dive
+  function airPass(prev) {
+    const rs = AIR.rings;
+    for (let i = rs.length - 1; i >= 0; i--) {
+      const r = rs[i];
+      if (!r.m.parent || r.z > run.z + 30) {
+        rs.splice(i, 1);
+        continue;
+      }
+      if (r.done || !(prev > r.z && run.z <= r.z)) continue;
+      r.done = true;
+      airRingGot(r);
+    }
+    const d = RUN.z0 - run.z;
+    const dp = RUN.z0 - prev;
+    if (d <= 216) return;
+    const base = 216 + 600 * Math.floor((d - 216) / 600);
+    if (dp < base + 1 && d >= base + 1) {
+      sndWhoosh();
+      runSay('Into the sky', 'gold');
+    }
+    if (dp < base + 217 && d >= base + 217) sndWhoosh();
+  }
+
+  // ---- gems up in the sky ----
+  function airGem(ch, x, y, z) {
+    return gem(ch, x, y + altAtZ(z), z);
+  }
+  function airGems(ch, z) {
+    const pats = [[[0, 2.25]], [[-0.8, 2.05], [0.8, 2.05]], [[-1.25, 1.2], [0, 2.3], [1.25, 1.2]]];
+    airPick(pats).forEach(([x, y]) => airGem(ch, x, y, z));
+  }
+
+  // ---- building the sky's glass ----
+  // how thick: thin breaks into many little pieces at a touch; thick takes two hits, very thick three
+  const THK = {
+    thin: { kind: 'tempered', t: 0.006, m: 'thin', alpha: [0.34, 0.9], pieceK: 1.25 },
+    mid: { kind: 'tempered', t: 0.016, m: 'mid', alpha: [0.44, 0.95], pieceK: 0.9 },
+    thick: { kind: 'thick', t: 0.06, need: 2, m: 'thick', alpha: [0.6, 1], pieceK: 0.75 },
+    slab: { kind: 'thick', t: 0.13, need: 3, m: 'slab', alpha: [0.72, 1], pieceK: 0.6 },
+  };
+  // a pane in the sky: poly across the way (x from the middle of the lane, y from where you would stand)
+  function airPane(ch, g, th, poly, z, A, o = {}) {
+    const T = THK[th];
+    const rec = gatePane(ch, g, T.kind, poly.map(([x, y]) => [x, y + A]), z, o.mat || AIR.m[T.m], o.alpha || T.alpha, {
+      t: T.t,
+      need: T.need,
+      pieceK: o.pieceK || T.pieceK,
+      rim: o.rim || (T.kind === 'thick' ? AIR.m.thickRim : AIR.m.rim),
+      crumble: o.crumble,
+    });
+    rec.thk = th;
+    // cracks go along with a pane that moves
+    rec.group = rec.mesh;
+    return rec;
+  }
+  // after moving a thing by hand: its box and its body follow
+  function airSettle(rec) {
+    rec.mesh.updateMatrixWorld(true);
+    rec.box.setFromObject(rec.mesh, false);
+    if (rec.body) {
+      const c = rec.box.getCenter(new THREE.Vector3());
+      rec.body.position.set(c.x, c.y, c.z);
+      rec.body.aabbNeedsUpdate = true;
+    }
+  }
+  function airReward(n, text) {
+    if (currentRoom !== 'run' || run.crashT === run.t) return;
+    run.ammo += n;
+    runPop('+' + n);
+    if (text) runSay(text, 'gold');
+    sndChord();
+    runHud();
+  }
+  // a crackle of electricity
+  function airZap(k) {
+    if (!canPlay()) return;
+    const t = actx.currentTime;
+    noise(t, 0.05 + k * 0.05, 'bandpass', 2400 + Math.random() * 3000, 0.05 + 0.1 * k, 3);
+    ping(t, 60 + Math.random() * 40, 0.06, 0.04 * k, 'sawtooth');
+  }
+  const _aq = new THREE.Quaternion();
+  const _av = new THREE.Vector3();
+  const AIR_X = {};
+  function airGate(ch, type, z, n) {
+    airMats();
+    const g = { z, recs: [], done: false, motion: null, ph: Math.random() * 6, lock: null, type, noPortal: true };
+    const side = Math.random() < 0.5 ? -1 : 1;
+    AIR_X[type](ch, g, z, side, altAtZ(z), n);
+    run.gates.push(g);
+    ch.gates.push(g);
+    return g;
+  }
+  function airSub(ch, z, type) {
+    const g = { z, recs: [], done: false, motion: null, ph: 0, lock: null, type, noPortal: true };
+    run.gates.push(g);
+    ch.gates.push(g);
+    return g;
+  }
+
+  // walls of glass, layer behind layer, some thin and some thick (Smash Hit style)
+  const THICK_POOL = [['thin', 'mid', 'thin', 'thick'], ['thin', 'mid', 'thick', 'thick', 'slab'], ['mid', 'thick', 'slab', 'thick', 'thin']];
+  AIR_X.wall = (ch, g, z, side, A, n) => {
+    const pool = THICK_POOL[Math.min(n, 2)];
+    const layers = n === 0 ? 2 : 3;
+    for (let L = 0; L < layers; L++) {
+      const gz = z - L * 2.6;
+      const gi = L === 0 ? g : airSub(ch, gz, 'wall');
+      const sx = (Math.random() - 0.5) * 0.5;
+      const shape = Math.floor(Math.random() * 3);
+      let poly;
+      if (shape === 0) poly = [[sx - 0.95, 0.3], [sx + 0.95, 0.3], [sx + 0.95, 2.8], [sx - 0.95, 2.8]];
+      else if (shape === 1) {
+        poly = [];
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+          poly.push([sx + Math.cos(a) * 1.2, 1.55 + Math.sin(a) * 1.2]);
+        }
+      } else poly = [[sx - 1.7, 0.75], [sx + 1.7, 0.75], [sx + 1.7, 2.35], [sx - 1.7, 2.35]];
+      airPane(ch, gi, airPick(pool), poly, gz, A);
+      // smaller panes off to the side: not in your way, but they break too
+      for (const s of [-1, 1]) {
+        if (Math.random() < 0.45) continue;
+        const cx = s * (2.2 + Math.random() * 0.9);
+        const cy = 0.6 + Math.random() * 2.2;
+        const w = 0.35 + Math.random() * 0.35;
+        const h = 0.45 + Math.random() * 0.6;
+        airPane(ch, null, airPick(['thin', 'mid', 'thick']), [[cx - w, cy - h], [cx + w, cy - h], [cx + w, cy + h], [cx - w, cy + h]], gz - Math.random() * 0.8, A);
+      }
+    }
+  };
+
+  // 1. a glass fan turning across the way, its hub off to one side: break the glowing hub and the whole fan goes
+  AIR_X.blade = (ch, g, z, side, A, n) => {
+    g.motion = { type: 'custom' };
+    const hx = side * 0.95;
+    const hy = 1.95;
+    const hub = V3(RUN.X + hx, A + hy, z);
+    const th = n >= 2 && Math.random() < 0.5 ? 'mid' : 'thin';
+    const w = (Math.random() < 0.5 ? 1 : -1) * (1.2 + Math.random() * 0.3 + Math.min(n, 3) * 0.08);
+    const a0 = Math.random() * 6.28;
+    const blades = [];
+    for (let i = 0; i < 3; i++) {
+      // built pointing along +x from the hub, then turned (so its box for "in your way" stays tight)
+      const poly = [[0.34, -0.26], [2.35, -0.15], [2.51, 0], [2.35, 0.15], [0.34, 0.26]].map(([x, y]) => [hx + x, hy + y]);
+      const rec = airPane(ch, g, th, poly, z, A, { mat: AIR.m.blade, pieceK: 0.7 });
+      const off = a0 + (i / 3) * Math.PI * 2;
+      rec.mot = (mesh, h0, T) => {
+        _aq.setFromAxisAngle(UZr, off + T * w);
+        mesh.position.copy(h0).sub(hub).applyQuaternion(_aq).add(hub);
+        mesh.quaternion.copy(_aq);
+      };
+      rec.mot(rec.mesh, rec.home, 0);
+      airSettle(rec);
+      blades.push(rec);
+    }
+    const h = runItem(ch, AIR.hubGeo, AIR.m.hub, hub.x, hub.y, z + 0.05);
+    h.shardN = 10;
+    attach(h, glowSprite('#ffc861', 1, hub.x, hub.y, z + 0.12, 1.1), 'extra');
+    h.onBreak = () => {
+      const live = blades.filter((b) => !b.broken && !b.dynamic);
+      let t = 0;
+      let k = 0;
+      fx.push((dt) => {
+        t += dt;
+        while (k < live.length && t >= k * 0.07) {
+          const b = live[k++];
+          if (b.broken || b.dynamic) continue;
+          shatter(b, b.box.getCenter(new THREE.Vector3()), V3(0, 0, -1), false, { soft: true });
+          glassNote(k + 3, 523.25);
+        }
+        return k < live.length;
+      });
+      airReward(3, 'Fan down');
+    };
+  };
+
+  // 2. glass scissors: two halves slide in from opposite corners and shut as you arrive; break one and both go
+  AIR_X.scissors = (ch, g, z, side, A, n) => {
+    g.motion = { type: 'custom' };
+    const M = runGlassMats();
+    const th = n >= 2 ? 'thick' : n === 1 && Math.random() < 0.5 ? 'mid' : 'thin';
+    const P = (x, y) => [side * x, y];
+    const halves = [
+      [[P(-1.74, 0.05), P(1.74, 2.95), P(-1.74, 2.95)], V3(-side * 2.7, 2.3, 0), AIR.m.sciA, 0.03],
+      [[P(-1.74, 0.05), P(1.74, 0.05), P(1.74, 2.95)], V3(side * 2.7, -2.3, 0), AIR.m.sciB, 0],
+    ];
+    const recs = halves.map(([poly, dir, mat, dz]) => {
+      const rec = airPane(ch, g, th, poly, z + dz, A, { mat, rim: M.lead });
+      rec.mot = (mesh, h0) => {
+        const k = clamp((run.z - z - 3.5) / 9, 0, 1);
+        mesh.position.copy(h0).addScaledVector(dir, k * k * (3 - 2 * k));
+      };
+      rec.mot(rec.mesh, rec.home, 0);
+      airSettle(rec);
+      return rec;
+    });
+    linkCascade(recs, { base: 392, step: 0.05, start: () => airReward(1, 'Snip') });
+  };
+
+  // 3. a heavy glass lens swinging on a chain from a cloud: shoot it, or wait for it to swing clear
+  AIR_X.pendulum = (ch, g, z, side, A, n) => {
+    g.motion = { type: 'custom' };
+    const M = runGlassMats();
+    const L = 5.2;
+    const cy = 1.55;
+    const R = 0.98;
+    const hinge = V3(RUN.X, A + cy + L, z);
+    const th = n === 0 ? 'mid' : n === 1 ? 'thick' : 'slab';
+    const oct = [];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      oct.push([Math.cos(a) * R, cy + Math.sin(a) * R]);
+    }
+    const rec = airPane(ch, g, th, oct, z, A, { pieceK: 0.65, rim: M.brass });
+    const chain = new THREE.Mesh(GXR.cordGeo, M.brass);
+    chain.scale.set(3.2, L - R, 3.2);
+    chain.position.set(0, R + (L - R) / 2, 0);
+    chain.userData.noHit = true;
+    chain.castShadow = false;
+    rec.mesh.add(chain);
+    const cl = new THREE.Mesh(AIR.puffGeo, AIR.m.cloud);
+    cl.position.set(hinge.x, hinge.y + 0.35, z - ch.z);
+    cl.userData.noHit = true;
+    cl.raycast = nNoRay;
+    ch.group.add(cl);
+    const amp = 0.58;
+    const w = 1.35 + Math.min(n, 3) * 0.06;
+    const ph = Math.random() * 6.28;
+    rec.mot = (mesh, h0, T) => {
+      _aq.setFromAxisAngle(UZr, Math.sin(T * w + ph) * amp);
+      mesh.position.copy(h0).sub(hinge).applyQuaternion(_aq).add(hinge);
+      mesh.quaternion.copy(_aq);
+    };
+    rec.mot(rec.mesh, rec.home, 0);
+    airSettle(rec);
+    rec.onBreak = () => tinkleShower(0.6);
+  };
+
+  // 4. a glass serpent: its head weaves in front of you, its body coils away behind; break the head and it all goes
+  AIR_X.serpent = (ch, g, z, side, A, n) => {
+    g.motion = { type: 'custom' };
+    const M = runGlassMats();
+    const list = [];
+    const N = 11;
+    const sp = 2.1 + Math.min(n, 3) * 0.15;
+    for (let i = 0; i < N; i++) {
+      const head = i === 0;
+      const s = head ? 1 : 0.9 * (1 - i / 15);
+      const zi = z - i * 1.15;
+      const bx = head ? 0 : side * (0.95 + 0.34 * i);
+      const by = 1.55 + (head ? 0 : 0.12 * i);
+      const w = head ? 0.92 : 0.6 * s;
+      const h = head ? 0.78 : 0.5 * s;
+      const poly = [[bx - w, by], [bx - w * 0.5, by - h], [bx + w * 0.5, by - h], [bx + w, by], [bx + w * 0.5, by + h], [bx - w * 0.5, by + h]];
+      const th = head ? (n >= 1 ? 'thick' : 'mid') : i % 3 === 0 ? 'mid' : 'thin';
+      const rec = airPane(ch, g, th, poly, zi, A, { mat: head ? AIR.m.head : M.jade[i % M.jade.length], rim: M.lead, pieceK: 0.6 });
+      if (!head) rec.noBlock = true;
+      const amp = head ? 0.3 : 0.42;
+      const lag = i * 0.34;
+      rec.mot = (mesh, h0, T) => {
+        const ph = T * sp - lag;
+        mesh.position.copy(h0);
+        mesh.position.x += Math.sin(ph) * amp;
+        mesh.position.y += Math.cos(ph * 0.8) * 0.16;
+        _aq.setFromAxisAngle(UZr, Math.cos(ph) * 0.2);
+        mesh.quaternion.copy(_aq);
+      };
+      list.push(rec);
+    }
+    for (const s of [-1, 1]) {
+      const e = new THREE.Mesh(AIR.eyeGeo, AIR.m.eye);
+      e.position.set(s * 0.34, 0.2, 0.06);
+      e.userData.noHit = true;
+      list[0].mesh.add(e);
+    }
+    linkCascade(list, { base: 440, step: 0.055, noteEvery: 2, start: () => airReward(3, 'Serpent down') });
+  };
+
+  // 5. a storm cloud charging a pane: break it before the lightning, or it fuses into glass that takes three hits
+  AIR_X.storm = (ch, g, z, side, A, n) => {
+    g.motion = { type: 'custom' };
+    const m = AIR.m.mid.clone();
+    (ch.mats = ch.mats || []).push(m);
+    const rec = airPane(ch, g, 'mid', [[-1.74, 0.05], [1.74, 0.05], [1.74, 2.95], [-1.74, 2.95]], z, A, { mat: m });
+    const cx = RUN.X + side * 0.5;
+    const cl = new THREE.Mesh(AIR.stormGeo[Math.random() < 0.5 ? 0 : 1], AIR.m.storm);
+    cl.position.set(cx, A + 5.6, z - ch.z - 1.2);
+    cl.userData.noHit = true;
+    cl.raycast = nNoRay;
+    ch.group.add(cl);
+    const S = { on: false, next: 0 };
+    const base = m.emissive.clone();
+    const hot = new THREE.Color('#9fd6ff');
+    const near = 12 - Math.min(n, 3) * 0.6; // the lightning comes a little sooner each time round
+    rec.mot = (mesh, h0, T) => {
+      if (S.on) {
+        m.emissiveIntensity = 0.75 + 0.25 * Math.sin(T * 30);
+        return;
+      }
+      const c = clamp((near + 15 - (run.z - z)) / 15, 0, 1);
+      m.emissive.copy(base).lerp(hot, c);
+      m.emissiveIntensity = 0.22 + c * (0.9 + 0.3 * Math.sin(T * 47));
+      if (c > 0.05 && T > S.next) {
+        S.next = T + 0.5 - c * 0.38;
+        airZap(c);
+        sparkle(V3(RUN.X + rand(-1.6, 1.6), A + rand(0.3, 2.8), z + 0.05), null, 4);
+      }
+      if (c >= 1) {
+        S.on = true;
+        airStrike(rec, m, V3(cx, A + 4.9, z - 1.2), V3(RUN.X + rand(-0.6, 0.6), A + 2.9, z));
+      }
+    };
+    rec.onBreak = () => {
+      if (!S.on) airReward(2, 'Before the lightning');
+    };
+  };
+  function airStrike(rec, m, from, to) {
+    airBolt(from, to);
+    sndThunder(0);
+    sndCrack(1);
+    rec.sheet.kind = 'thick';
+    rec.sheet.need = 3;
+    rec.sheet.dmg = 0;
+    m.color.set('#cdb0ff');
+    m.emissive.set('#8d5cff');
+    if (currentRoom === 'run') runSay('Charged: three hits', 'bad');
+    if (!reduceMotion) shake = Math.max(shake, 0.02);
+    buzz([30, 40, 30]);
+    sparkle(to, V3(0, -1, 0), 30);
+    // a flash of light (put back on the next frame's lighting)
+    hemiLight.intensity = hemiLight.intensity * 2.4 + 1.2;
+    let t = 0;
+    fx.push((dt) => {
+      t += dt;
+      if (t < 0.12) return true;
+      atmos.applied = '';
+      return false;
+    });
+  }
+  function airBolt(from, to) {
+    const N = 10;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const p = from.clone().lerp(to, i / N);
+      if (i && i < N) {
+        p.x += (Math.random() - 0.5) * 0.8;
+        p.z += (Math.random() - 0.5) * 0.3;
+      }
+      pts.push(p);
+    }
+    const pos = [];
+    const w = 0.07;
+    for (let i = 0; i < N; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      pos.push(a.x - w, a.y, a.z, a.x + w, a.y, a.z, b.x + w, b.y, b.z, a.x - w, a.y, a.z, b.x + w, b.y, b.z, b.x - w, b.y, b.z);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const m = new THREE.Mesh(geo, AIR.m.bolt);
+    m.userData.noHit = true;
+    m.raycast = nNoRay;
+    m.frustumCulled = false;
+    room.add(m);
+    const glow = glowSprite('#cfe6ff', 0, to.x, to.y, to.z, 3);
+    let t = 0;
+    fx.push((dt) => {
+      t += dt;
+      m.visible = t < 0.06 || (t > 0.1 && t < 0.2) || (t > 0.24 && t < 0.3);
+      glow.visible = m.visible;
+      if (t < 0.34) return true;
+      drop(m);
+      drop(glow);
+      return false;
+    });
+  }
+
+  // 6. a flock of glass birds flying across in front of you: a pebble each, more for the whole flock
+  function airBirds(ch, z, n) {
+    airMats();
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const A = altAtZ(z);
+    const g = { z, recs: [], done: false, motion: { type: 'custom' }, ph: 0, lock: null, type: 'birds', noPortal: true };
+    const N = 5;
+    const flock = { got: 0 };
+    for (let i = 0; i < N; i++) {
+      const row = Math.ceil(i / 2);
+      const wingSide = i === 0 ? 0 : i % 2 ? 1 : -1;
+      const ox = side * row * 0.75;
+      const oz = wingSide * row * 0.7;
+      const oy = row * 0.12;
+      const pos = (dist) => {
+        const u = clamp((40 - dist) / 34, 0, 1);
+        return [RUN.X + side * (7.5 - 15 * u) + ox, A + 2.35 + oy + Math.sin(u * 6.28 + i) * 0.3, z + oz];
+      };
+      const p0 = pos(40);
+      const rec = runItem(ch, AIR.birdGeo, AIR.m.bird, p0[0], p0[1], p0[2]);
+      rec.noBlock = true;
+      rec.shardN = 6;
+      rec.home = rec.mesh.position.clone();
+      rec.bird = true;
+      const wings = AIR.wingGeo.map((wg) => {
+        const w = new THREE.Mesh(wg, AIR.m.bird);
+        w.castShadow = false;
+        rec.mesh.add(w);
+        attach(rec, w, 'extra');
+        return w;
+      });
+      const heading = side > 0 ? Math.PI : 0;
+      const fp = Math.random() * 6;
+      rec.mot = (mesh, h0, T) => {
+        const p = pos(run.z - g.z);
+        mesh.position.set(p[0], p[1], p[2]);
+        mesh.rotation.set(0, heading, Math.sin(T * 2 + i) * 0.08);
+        const f = Math.sin(T * 11 + fp) * 0.65;
+        wings[0].rotation.x = f;
+        wings[1].rotation.x = -f;
+      };
+      rec.onBreak = () => {
+        if (currentRoom !== 'run') return;
+        flock.got++;
+        run.ammo += 1;
+        glassNote(flock.got + 4, 783.99);
+        if (flock.got === N) {
+          run.ammo += 3;
+          runPop('+4');
+          runSay('Whole flock', 'gold');
+          sndChord();
+        } else runPop('+1');
+        runHud();
+      };
+      g.recs.push(rec);
+    }
+    run.gates.push(g);
+    ch.gates.push(g);
+  }
+
+  // the end of each sky: a great glass wheel turning in the clouds. Shields turn in front of its golden heart;
+  // break the heart (two hits) and the whole wheel comes apart in slow motion
+  function wedgePoly(r0, r1, half) {
+    const P = (a, r) => [Math.cos(a) * r, Math.sin(a) * r];
+    return [P(-half, r0), P(-half, r1), P(-half / 2, r1), P(0, r1), P(half / 2, r1), P(half, r1), P(half, r0)];
+  }
+  AIR_X.chakra = (ch, g, z, side, A, n) => {
+    const M = runGlassMats();
+    g.motion = { type: 'custom' };
+    const cy = 1.55;
+    const C = V3(RUN.X, A + cy, z);
+    const spin = (rec, off, w) => {
+      rec.noBlock = true;
+      rec.mot = (mesh, h0, T) => {
+        _aq.setFromAxisAngle(UZr, off + T * w);
+        mesh.position.copy(h0).sub(C).applyQuaternion(_aq).add(C);
+        mesh.quaternion.copy(_aq);
+      };
+      rec.mot(rec.mesh, rec.home, 0);
+      airSettle(rec);
+    };
+    const up = (poly) => poly.map(([x, y]) => [x, cy + y]);
+    const rest = [];
+    const heart = [];
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      heart.push([Math.cos(a) * 0.46, cy + Math.sin(a) * 0.46]);
+    }
+    const hub = airPane(ch, g, n >= 2 ? 'slab' : 'thick', heart, z, A, { mat: M.stain[6], rim: M.brass });
+    attach(hub, glowSprite('#ffd36b', 2, C.x, C.y, z + 0.12, 1.4), 'extra');
+    for (let i = 0; i < 3; i++) {
+      const r = airPane(ch, g, 'mid', up(wedgePoly(0.12, 0.98, Math.PI / 6)), z + 0.35, A, { mat: M.stain[3], rim: M.lead, pieceK: 0.6 });
+      spin(r, (i / 3) * Math.PI * 2, (side > 0 ? 1 : -1) * (1.15 + Math.min(n, 3) * 0.1));
+      rest.push(r);
+    }
+    for (let i = 0; i < 8; i++) {
+      const r = airPane(ch, g, 'thin', up(wedgePoly(1.08, 1.58, Math.PI / 8 - 0.03)), z, A, { mat: M.stain[i % 2 ? 0 : 4], rim: M.lead, pieceK: 0.5 });
+      spin(r, (i / 8) * Math.PI * 2, side > 0 ? -0.6 : 0.6);
+      rest.push(r);
+    }
+    for (let i = 0; i < 12; i++) {
+      const r = airPane(ch, g, 'mid', up(wedgePoly(1.72, 2.75, Math.PI / 12 - 0.025)), z - 0.05, A, { mat: M.stain[[1, 2, 5, 7][i % 4]], rim: M.lead, crumble: 0.12 });
+      spin(r, (i / 12) * Math.PI * 2, side > 0 ? 0.35 : -0.35);
+      rest.push(r);
+    }
+    // brass circles between the rings
+    const fr = [1.02, 1.65, 2.8].map((R) => new THREE.TorusGeometry(R, 0.035, 6, 64).translate(RUN.X, A + cy, 0));
+    const fm = put(mergeGeometries(fr, false), M.brass, 0, 0, z - ch.z - 0.02, ch.group);
+    fr.forEach((x) => x.dispose());
+    fm.castShadow = false;
+    fm.userData.noHit = true;
+    fm.raycast = nNoRay;
+    hub.onBreak = () => {
+      const live = rest.filter((x) => !x.broken && !x.dynamic).map((x) => ({ x, d: x.box.getCenter(_av).distanceTo(C) })).sort((a, b) => a.d - b.d);
+      let t = 0;
+      let k = 0;
+      fx.push((dt) => {
+        t += dt;
+        while (k < live.length && t >= (k + 1) * 0.035) {
+          const x = live[k++].x;
+          if (x.broken || x.dynamic) continue;
+          shatter(x, x.box.getCenter(new THREE.Vector3()), V3(0, 0, -1), false, { soft: true });
+          if (k % 2 === 0) glassNote(k / 2, 587.33);
+        }
+        return k < live.length;
+      });
+      // the frame drops away into the clouds
+      let v = 0;
+      fx.push((dt) => {
+        if (!fm.parent) return false;
+        v += 9.8 * dt;
+        fm.position.y -= v * dt;
+        fm.rotation.z += dt * 0.6;
+        if (fm.position.y > -30) return true;
+        fm.visible = false;
+        return false;
+      });
+      tinkleShower(1);
+      if (currentRoom === 'run' && run.crashT !== run.t) {
+        runSlowMo(2.6);
+        airReward(10, 'Sky Chakra');
+        for (let i = 0; i < 6; i++) sparkle(V3(C.x + rand(-2, 2), C.y + rand(-2, 2), z), V3(0, 0.4, 1), 26);
+      }
+    };
+  };
 
   // =====================================================================
   // Game flow: the start card (with a mood check), the pause sheet, and the end-of-session summary
@@ -17985,7 +18952,7 @@
         hidden.push(o);
       }
     });
-    if (currentRoom === 'run') cubeCam.position.set(RUN.X, 1.6, run.z - 8);
+    if (currentRoom === 'run') cubeCam.position.set(RUN.X, 1.6 + airAlt(RUN.z0 - run.z), run.z - 8);
     else cubeCam.position.set(...(ENV_POS[currentRoom] || [0.45, 1.3, 0.45]));
     const sm = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false;
@@ -18306,7 +19273,7 @@
     window.__kk = {
       view, camera, scene, renderer, quality, fireWreck, getCrumbs: () => crumbPools, getWreck: () => wreck.active, switchRoom, getRoomName: () => currentRoom, gunDebug: () => { gunAim.updateMatrixWorld(true); const p = gunKick.localToWorld(new THREE.Vector3(0, -0.05, 0.04)).project(gunCam); return { p: [p.x, p.y, p.z], vis: gunKick.visible, model: gunModel.visible, aspect: gunCam.aspect, pos: gunAim.position.toArray(), sc: gunAim.scale.x }; }, aimQuery, settings, getFlying: () => flying, startGame, openPause, openSummary, getState: () => gameState, getSession: () => session, setTod, setRain, getAtmos: () => atmos, setSaans, getSaans: () => saans, setQuality, liteGlass, shoot, collide, setTool, getTool: () => tool, throwBall, swingHammer, startQuake, getQuake: () => quake, getBalls: () => balls, strike, say, THREE, resetRoom, startRewind,
       run: (n, dt = 1 / 60) => { window.__forceDt = dt; window.__noRender = true; for (let i = 0; i < n; i++) frame(); window.__forceDt = 0; window.__noRender = false; scene.updateMatrixWorld(); camera.updateMatrixWorld(); },
-      natRef: () => ({ NAT, sun, hemiLight, post }), sceneryStats: (zone, v = 0, gorge = false) => { natMats(); if (zone === 'river') riverMats(); const make = zone === 'jungle' ? jungleScenery : zone === 'mountain' ? mountainScenery : zone === 'river' ? riverScenery : gardenScenery; const B = nBag(); const ms = []; for (const p of (gfxTier() !== 'low' && zone !== 'garden' && !gorge ? ['L', 'L2', 'R', 'R2', 'C'] : ['L', 'R', 'C'])) { const t0 = performance.now(); make(v, B, p, gorge); ms.push(Math.round(performance.now() - t0)); } const tris = {}; for (const k in B) if (B[k] && B[k].p) tris[k] = B[k].p.length / 9; return { ms, tris }; }, forceGates: (list) => { run.plan.intro.push(...list); }, planPreview: (n, from = 0) => { const keep = run.plan; planReset(from); const out = []; for (let k = Math.floor(from / RUN.L); k < Math.floor(from / RUN.L) + n; k++) { const p = planChunk(k * RUN.L); out.push(k * RUN.L + ':' + zoneAt(k * RUN.L + RUN.L - 0.01)[0] + ':' + (p.kind === 'gates' ? p.gates.join('+') : p.kind + (p.variant !== undefined ? p.variant : ''))); } run.plan = keep; return out; }, glassKinds: () => ({ zone: ZONE_GATES, stages: STAGES.map((s) => s[1]).flat() }), perfState: () => ({ idle: !!FRM.idle, busy: sceneBusy(), cap: fpsCap(), level: quality.level, pr: renderer.getPixelRatio(), verb: !!(revWet && revWet.numberOfOutputs && actx) }), getAudio: () => ({ actx, master, bus, ensureAudio, birdCall }), zoneDebug: () => ({ dap: NAT.dap ? NAT.dap.amt.value : -1, tier: gfxTier(), tm: renderer.toneMapping, sun: skyUniforms.uSun.value.toArray(), sunL: sun.position.clone().sub(sun.target.position).normalize().toArray(), zq: zq.length, zt: Object.keys(ZT), tun: Object.keys(TUN), peaks: !!NAT.peaks, amb: AMB.on }), pumpTimed: () => { const t0 = performance.now(); const had = zq.length; pumpZones(); return had ? performance.now() - t0 : -1; }, queueZone, zoneMixNow,
+      natRef: () => ({ NAT, sun, hemiLight, post }), sceneryStats: (zone, v = 0, gorge = false) => { natMats(); if (zone === 'river') riverMats(); const make = zone === 'jungle' ? jungleScenery : zone === 'mountain' ? mountainScenery : zone === 'river' ? riverScenery : gardenScenery; const B = nBag(); const ms = []; for (const p of (gfxTier() !== 'low' && zone !== 'garden' && !gorge ? ['L', 'L2', 'R', 'R2', 'C'] : ['L', 'R', 'C'])) { const t0 = performance.now(); make(v, B, p, gorge); ms.push(Math.round(performance.now() - t0)); } const tris = {}; for (const k in B) if (B[k] && B[k].p) tris[k] = B[k].p.length / 9; return { ms, tris }; }, airAlt, airRole, airK, getAir: () => AIR, forceGates: (list) => { run.plan.intro.push(...list); }, planPreview: (n, from = 0) => { const keep = run.plan; planReset(from); const out = []; for (let k = Math.floor(from / RUN.L); k < Math.floor(from / RUN.L) + n; k++) { const p = planChunk(k * RUN.L); out.push(k * RUN.L + ':' + zoneAt(k * RUN.L + RUN.L - 0.01)[0] + ':' + (p.kind === 'gates' ? p.gates.join('+') : p.kind + (p.variant !== undefined ? p.variant : ''))); } run.plan = keep; return out; }, glassKinds: () => ({ zone: ZONE_GATES, stages: STAGES.map((s) => s[1]).flat() }), perfState: () => ({ idle: !!FRM.idle, busy: sceneBusy(), cap: fpsCap(), level: quality.level, pr: renderer.getPixelRatio(), verb: !!(revWet && revWet.numberOfOutputs && actx) }), getAudio: () => ({ actx, master, bus, ensureAudio, birdCall }), zoneDebug: () => ({ dap: NAT.dap ? NAT.dap.amt.value : -1, tier: gfxTier(), tm: renderer.toneMapping, sun: skyUniforms.uSun.value.toArray(), sunL: sun.position.clone().sub(sun.target.position).normalize().toArray(), zq: zq.length, zt: Object.keys(ZT), tun: Object.keys(TUN), peaks: !!NAT.peaks, amb: AMB.on }), pumpTimed: () => { const t0 = performance.now(); const had = zq.length; pumpZones(); return had ? performance.now() - t0 : -1; }, queueZone, zoneMixNow,
       getItems: () => items, getCine: () => cine, getFx: () => fx, getRun: () => run, getHangers: () => hangers, getSfx: () => SFX, playSfx, getWorld: () => world, getDebris: () => debris, getShards: () => shards, getMovers: () => movers,
       getSplats: () => (splats ? { n: splatN, count: splats.count } : null), getRoom: () => room, getBroken: () => brokenCount, getRewind: () => rw, isRewinding: () => rewinding, getLog: () => shardLog,
       breakAll: (n = 1e9) => { room.updateMatrixWorld(true); items.filter((r) => !r.broken).slice(0, n).forEach((r) => shatter(r, r.box.getCenter(new THREE.Vector3()), null, false)); },
