@@ -1,0 +1,97 @@
+name: Kaanch Run APK
+
+# the Godot game in kaanch-run/: built into an APK on every change, published to the "run-latest" release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'kaanch-run/**'
+      - '.github/workflows/kaanch-run.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kaanch-run-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-4.3-stable-android-1
+
+      - name: Get Godot and its Android templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          mkdir -p ~/godot ~/.local/share/godot/export_templates/4.3.stable
+          cd ~/godot
+          curl -sSL -o g.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q g.zip && rm g.zip
+          curl -sSL -o t.tpz https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          unzip -q -j t.tpz templates/android_debug.apk templates/android_release.apk templates/version.txt -d ~/.local/share/godot/export_templates/4.3.stable/
+          rm t.tpz
+          ls -la ~/.local/share/godot/export_templates/4.3.stable/
+
+      - name: Editor settings (Android SDK, Java, signing key)
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.3.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_SDK_ROOT}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          export/android/debug_keystore = "${GITHUB_WORKSPACE}/android/app/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          cat ~/.config/godot/editor_settings-4.3.tres
+
+      - name: Version from the run number
+        run: sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/" kaanch-run/export_presets.cfg
+
+      - name: Build the APK
+        working-directory: kaanch-run
+        run: |
+          G=~/godot/Godot_v4.3-stable_linux.x86_64
+          mkdir -p build
+          $G --headless --import 2>&1 | tail -20 || true
+          $G --headless --export-debug "Android" build/KaanchRun.apk 2>&1 | tee export.log
+          if [ ! -f build/KaanchRun.apk ]; then
+            # show the reason on the run's summary page
+            msg=$(grep -iE "error|warn|fail" export.log | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=Godot export failed::${msg}"
+            exit 1
+          fi
+          ls -la build
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: KaanchRun-apk
+          path: kaanch-run/build/KaanchRun.apk
+
+      - name: Publish to the "run-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view run-latest >/dev/null 2>&1 || gh release create run-latest --title "Kaanch Run (latest build)" --notes "The newest build of Kaanch Run, the Godot glass run." --latest=false
+          gh release upload run-latest kaanch-run/build/KaanchRun.apk --clobber
+          gh release edit run-latest --notes "The newest build of Kaanch Run (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}). Download KaanchRun.apk and open it on your phone to install. It installs next to Kaanch Ka Kamra, it does not replace it."

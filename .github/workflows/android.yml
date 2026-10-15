@@ -3,6 +3,9 @@ name: Android APK
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'kaanch-run/**'
+      - '.github/workflows/kaanch-run.yml'
   workflow_dispatch:
 
 permissions:
