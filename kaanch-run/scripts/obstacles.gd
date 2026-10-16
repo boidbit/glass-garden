@@ -7,6 +7,7 @@ const EYE := 2.2
 const W := 2.4      # half the width of a full pane
 const Y0 := 0.5
 const Y1 := 3.9
+const HALF := 4.4   # half the width of a door
 
 # what unlocks when (by room in the endless run)
 const POOL := [
@@ -17,7 +18,7 @@ const POOL := [
 	["flyin", "shutters", "revolving", "charge"],
 ]
 # the ones that look right floating in the open sky (nothing standing on a floor or hanging from a roof)
-const SKY_OK := ["blocks", "pane", "split", "grid", "layers", "stack", "color_row", "tempered", "frosted", "slide", "rise", "hinge", "weak", "laminated", "shy", "spinner", "rotor", "prism", "mirror", "orbit", "blast", "snake", "shield", "halves", "flyin", "charge", "shutters"]
+const SKY_OK := ["giant", "slide_block", "fall_blocks", "scissors", "saw_disc", "diag_blade", "blade_line", "chessboard", "tile_rain", "rot_grid", "hole_glass", "tube", "twotone", "domino", "blocks", "pane", "split", "grid", "layers", "stack", "color_row", "tempered", "frosted", "slide", "rise", "hinge", "weak", "laminated", "shy", "spinner", "rotor", "prism", "mirror", "orbit", "blast", "snake", "shield", "halves", "flyin", "charge", "shutters"]
 # gentler ones for the calm mode
 const CALM := ["pane", "split", "grid", "layers", "stack", "color_row", "tempered", "slide", "rise", "spinner", "orbit", "prism", "blast", "collapse", "halves", "rotor"]
 
@@ -104,20 +105,22 @@ static func build(G, type: String, d: float, r: int) -> void:
 					var k := clampf((ahead - 5.0) / 6.0, 0.0, 1.0)
 					pp.node.transform = pp.base.translated(Vector3(sd * 7.0 * k * k, 0, 0))
 		"rotor":
-			var w := (1.0 + randf() * 0.5) * s
+			var w := randf_range(0.7, 2.2) * s
 			var bars := 1 if r < 4 else 2
+			var bk: String = ["thin", "mid", "thick", "slab"][mini(3, randi() % (2 + r / 2))]
+			var bh := randf_range(0.32, 0.55)
 			for i in bars:
-				var p: GPane = G.pane(g, Glass.rect(-2.1, 2.1, EYE - 0.42, EYE + 0.42), d - i * 0.05, "mid", G.rng_color(0.3))
+				var p: GPane = G.pane(g, Glass.rect(-2.2, 2.2, EYE - bh, EYE + bh), d - i * 0.05, bk, G.rng_color(0.3))
 				var off := randf() * PI + i * PI * 0.5
 				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off + t * w)
 		"spinner":
 			var hub := Vector2(s * 1.1, EYE + 0.55)
-			var w := (1.3 + minf(r, 6) * 0.07) * (1 if randf() < 0.5 else -1)
+			var w := randf_range(0.9, 1.9 + minf(r, 6) * 0.1) * (1 if randf() < 0.5 else -1)
 			var a0 := randf() * TAU
 			var blade := PackedVector2Array([Vector2(0.35, -0.28), Vector2(2.7, -0.16), Vector2(2.9, 0.0), Vector2(2.7, 0.16), Vector2(0.35, 0.28)])
 			var blades := []
 			for i in 3:
-				var p: GPane = G.pane(g, Glass.moved(blade, hub), d, "thin" if r < 4 else "mid", G.rng_color(0.3))
+				var p: GPane = G.pane(g, Glass.moved(blade, hub), d, ["thin", "mid", "thick"][mini(2, randi() % (1 + r / 2))], G.rng_color(0.3))
 				var off := a0 + TAU * i / 3.0
 				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, hub, off + t * w)
 				blades.append(p)
@@ -198,13 +201,225 @@ static func build(G, type: String, d: float, r: int) -> void:
 		"blocks":
 			# a wall of glass bricks with one gap: break your way through, or find the gap
 			var gap := randi() % 3
+			var wall := []
 			for cx in 3:
 				for cy in 3:
 					if cx == gap and cy == 1:
 						continue
 					var x0 := -W + cx * 1.6
 					var y0 := Y0 + cy * 1.135
-					G.pane(g, Glass.rect(x0 + 0.04, x0 + 1.56, y0 + 0.04, y0 + 1.09), d, "block" if (cx + cy) % 2 == 0 else "thick")
+					wall.append(G.pane(g, Glass.rect(x0 + 0.04, x0 + 1.56, y0 + 0.04, y0 + 1.09), d, "block" if (cx + cy) % 2 == 0 else "thick"))
+			# one wall: a hit anywhere brings all of it down
+			for q in wall:
+				q.hp = 1
+			G.link(wall)
+		# ---- big glass ----
+		"giant":
+			# a cube of glass as wide as the way, two metres deep: two hits
+			G.pane(g, Glass.rect(-4.3, 4.3, 0.05, 6.1), d, "giant")
+		"slide_block":
+			# a block sliding from side to side: slip past it, or break it
+			var p: GPane = G.pane(g, Glass.rect(-1.5, 1.5, 0.2, 4.4), d, "block")
+			var sp := randf_range(0.9, 1.5)
+			var ph := g.ph
+			p.move = func(pp: GPane, t: float, _a: float): pp.node.transform = pp.base.translated(Vector3(sin(t * sp + ph) * 2.6, 0, 0))
+		"fall_blocks":
+			# tall blocks dropping one after another, landing three or four seconds before you get there
+			for i in 3:
+				var bx: float = [-0.9, 0.9, 0.0][i] * s
+				var dz := d + i * 5.0
+				var gi: GGate = g if i == 0 else G.new_gate("fall_blocks", dz)
+				var p: GPane = G.pane(gi, Glass.rect(bx - 1.4, bx + 1.4, 0.05, 5.2), dz, "block")
+				var landed := [false]
+				var secs := 3.6 - i * 0.25
+				p.move = func(pp: GPane, _t: float, ahead: float):
+					var land: float = maxf(G.speed, 6.0) * secs
+					var k := clampf((ahead - land) / 7.0, 0.0, 1.0)
+					pp.node.transform = pp.base.translated(Vector3(0, 15.0 * k * k, 0))
+					if k <= 0.0 and not landed[0]:
+						landed[0] = true
+						G.thump(pp.node.global_transform.origin)
+		# ---- blades ----
+		"pendulum_blade":
+			# a long blade hanging from above, swinging across
+			var top := 7.2
+			var blade := PackedVector2Array([Vector2(-0.25, top), Vector2(0.25, top), Vector2(0.55, EYE - 0.4), Vector2(0.0, EYE - 1.3), Vector2(-0.55, EYE - 0.4)])
+			var p: GPane = G.pane(g, blade, d, "thick" if r >= 3 else "mid")
+			var amp := randf_range(0.45, 0.6)
+			var ws := randf_range(1.3, 2.0)
+			var ph := g.ph
+			p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, top), sin(t * ws + ph) * amp)
+		"scissors":
+			# two long blades that open and close like scissors
+			var c := Vector2(0, EYE)
+			var ws := randf_range(1.4, 2.2)
+			var ph := g.ph
+			for i in 2:
+				var sd := -1.0 if i == 0 else 1.0
+				var p: GPane = G.pane(g, Glass.rect(-3.4, 3.4, EYE - 0.22, EYE + 0.22), d + i * 0.12, "thick" if r >= 4 else "mid")
+				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, c, sd * (0.12 + 0.55 * (0.5 + 0.5 * sin(t * ws + ph))))
+		"saw_disc":
+			# a round blade of glass running along the way, turning
+			var p: GPane = G.pane(g, Glass.ngon(16, 1.35, Vector2(0, EYE - 0.3)), d, "thick")
+			var sp := randf_range(0.8, 1.4)
+			var ph := g.ph
+			var cy := EYE - 0.3
+			p.move = func(pp: GPane, t: float, _a: float):
+				var b := Basis(Vector3(0, 0, 1), t * 5.0)
+				pp.node.transform = Transform3D(b, Vector3(sin(t * sp + ph) * 2.9, cy, pp.base.origin.z))
+		"diag_blade":
+			# blades cutting across from corner to corner
+			for i in 2:
+				var dir := Vector2(0.75, 0.66) if i == 0 else Vector2(-0.75, 0.66)
+				var poly := Glass.turned(Glass.rect(-2.0, 2.0, -0.2, 0.2), (PI * 0.25) * (1.0 if i == 0 else -1.0))
+				var p: GPane = G.pane(g, Glass.moved(poly, Vector2(0, EYE)), d + i * 2.5, "mid" if r < 4 else "thick")
+				var sp := randf_range(1.0, 1.6)
+				var ph := g.ph + i * 1.7
+				p.move = func(pp: GPane, t: float, _a: float):
+					var o := dir * sin(t * sp + ph) * 2.2
+					pp.node.transform = pp.base.translated(Vector3(o.x, o.y, 0))
+		"blade_line":
+			# four turning blades in a row, each at its own speed: find the gaps
+			for i in 4:
+				var dz := d + i * 3.0
+				var gi: GGate = g if i == 0 else G.new_gate("blade_line", dz)
+				var w := randf_range(0.8, 2.4) * (1.0 if i % 2 == 0 else -1.0)
+				var off := randf() * PI
+				var p: GPane = G.pane(gi, Glass.rect(-2.3, 2.3, EYE - 0.3, EYE + 0.3), dz, ["mid", "thick"][i % 2] if r >= 3 else "mid")
+				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off + t * w)
+		# ---- doors that move by themselves ----
+		"sensor_door":
+			# opens as you come; now and then it sticks shut
+			_doors(G, g, d, "stick" if randf() < 0.45 else "open", r)
+		"closing_doors":
+			# open, but they slide shut as you come
+			_doors(G, g, d, "close", r)
+		"door_line":
+			# three doors in a row, each with its own mind
+			var modes := ["open", "close", "stick"]
+			modes.shuffle()
+			for i in 3:
+				var dz := d + i * 6.0
+				var gi: GGate = g if i == 0 else G.new_gate("door_line", dz)
+				_doors(G, gi, dz, modes[i], r)
+		"shutter_door":
+			# a shutter of glass coming down from above
+			var p: GPane = G.pane(g, Glass.rect(-HALF, HALF, 0.05, 6.2), d, "mid" if r < 4 else "thick")
+			p.move = func(pp: GPane, _t: float, ahead: float):
+				var k := clampf((ahead - 9.0) / 12.0, 0.0, 1.0)
+				pp.node.transform = pp.base.translated(Vector3(0, 6.3 * k, 0))
+			G._frame(g, d, Color("9fe8e0"))
+		"button_door":
+			# a heavy door: hit the button and it opens; or break it, which costs
+			var parts := []
+			for i in 2:
+				parts.append(G.pane(g, Glass.rect(-HALF, 0.0, 0.05, 6.2) if i == 0 else Glass.rect(0.0, HALF, 0.05, 6.2), d, "slab"))
+			var open := [-1.0]
+			for i in 2:
+				var sd := -1.0 if i == 0 else 1.0
+				var p: GPane = parts[i]
+				p.move = func(pp: GPane, t: float, _a: float):
+					if open[0] < 0.0:
+						return
+					var k := clampf((t - open[0]) / 0.6, 0.0, 1.0)
+					pp.node.transform = pp.base.translated(Vector3(sd * 4.6 * k * k * (3.0 - 2.0 * k), 0, 0))
+					if k >= 1.0:
+						pp.opened = true
+			var tg = G.target("button", Vector3(s * randf_range(1.2, 3.2), randf_range(1.0, 4.6), -d + 0.4), 0.45, g)
+			tg.on_hit = func(): open[0] = G.t
+			G._frame(g, d, Color("ffc861"))
+		# ---- squares ----
+		"chessboard":
+			# thick and thin squares, one after the other: break the thin ones
+			for cx in 4:
+				for cy in 3:
+					var x0 := -2.4 + cx * 1.2
+					var y0 := 0.5 + cy * 1.2
+					G.pane(g, Glass.rect(x0 + 0.03, x0 + 1.17, y0 + 0.03, y0 + 1.17), d, "slab" if (cx + cy) % 2 == 0 else "thin")
+		"tile_rain":
+			# small squares falling from above into the way
+			var spots := []
+			for cx in 4:
+				for cy in 3:
+					spots.append(Vector2(-1.8 + cx * 1.2, 1.1 + cy * 1.2))
+			spots.shuffle()
+			for i in 7:
+				var c: Vector2 = spots[i]
+				if i == 0:
+					c = Vector2(0.0, EYE)
+				var p: GPane = G.pane(g, Glass.rect(c.x - 0.55, c.x + 0.55, c.y - 0.55, c.y + 0.55), d + randf_range(-0.6, 0.6), "mid")
+				var late := randf_range(0.0, 8.0)
+				p.move = func(pp: GPane, _t: float, ahead: float):
+					var k := clampf((ahead - 10.0 - late) / 8.0, 0.0, 1.0)
+					pp.node.transform = pp.base.translated(Vector3(0, 12.0 * k * k, 0))
+		"rot_grid":
+			# a whole grid of squares turning slowly
+			var w := randf_range(0.35, 0.7) * s
+			for cx in 3:
+				for cy in 3:
+					var x0 := -1.8 + cx * 1.2
+					var y0 := EYE - 1.8 + cy * 1.2
+					var p: GPane = G.pane(g, Glass.rect(x0 + 0.03, x0 + 1.17, y0 + 0.03, y0 + 1.17), d, "thick" if (cx + cy) % 2 == 0 else "mid")
+					p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), t * w)
+		"popout":
+			# squares sliding out of the walls into the way
+			var spots := [Vector2(-1.2, 1.1), Vector2(1.2, 1.1), Vector2(0.0, EYE), Vector2(-1.2, 3.3), Vector2(1.2, 3.3), Vector2(0.0, 4.4)]
+			for c in spots:
+				var from := -6.0 if c.x < 0.0 or (c.x == 0.0 and randf() < 0.5) else 6.0
+				var p: GPane = G.pane(g, Glass.rect(c.x - 0.58, c.x + 0.58, c.y - 0.55, c.y + 0.55), d, "thick" if r >= 3 else "mid")
+				var late := randf_range(0.0, 4.0)
+				p.move = func(pp: GPane, _t: float, ahead: float):
+					var k := clampf((ahead - 8.0 - late) / 9.0, 0.0, 1.0)
+					pp.node.transform = pp.base.translated(Vector3(from * k, 0, 0))
+		"hole_glass":
+			# a big pane with a square hole in it: a marble through the hole is wasted
+			var hx := randf_range(-1.2, 1.2)
+			var hy := 3.6 if randf() < 0.5 else 1.2
+			var parts := [
+				G.pane(g, Glass.rect(-2.4, hx - 0.6, 0.4, 4.4), d, "mid"),
+				G.pane(g, Glass.rect(hx + 0.6, 2.4, 0.4, 4.4), d, "mid"),
+				G.pane(g, Glass.rect(hx - 0.6, hx + 0.6, 0.4, hy - 0.6), d, "mid"),
+				G.pane(g, Glass.rect(hx - 0.6, hx + 0.6, hy + 0.6, 4.4), d, "mid"),
+			]
+			parts = parts.filter(func(q): return Glass.area(q.poly) > 0.05)
+			G.link(parts)
+		# ---- other glass ----
+		"tube":
+			# rings of glass to fly through, and a pane at the far end
+			var c := Vector2(0, 3.0)
+			for k in 4:
+				var dz := d + k * 2.2
+				var gi: GGate = g if k == 0 else G.new_gate("tube", dz)
+				for i in 10:
+					var poly := Glass.moved(Glass.turned(Glass.wedge(2.45, 2.85, PI / 10.0 - 0.025), TAU * i / 10.0), c)
+					var p: GPane = G.pane(gi, poly, dz, "mid", -1, false)
+					p.bonus = 5
+			var gc: GGate = G.new_gate("tube", d + 9.0)
+			G.pane(gc, Glass.ngon(10, 1.5, Vector2(0, EYE)), d + 9.0, "thin")
+		"twotone":
+			# half thin, half very thick, one pane: hit the thin side and it all goes
+			var cut := randf_range(-0.6, 0.6)
+			var thin_left := randf() < 0.5
+			var a: GPane = G.pane(g, full(-W, cut), d, "thin" if thin_left else "slab")
+			var b: GPane = G.pane(g, full(cut, W), d, "slab" if thin_left else "thin")
+			G.link([a, b])
+		"domino":
+			# tall panes joined by a bar: break one and the rest follow
+			var list := []
+			for i in 5:
+				var x0 := -W + i * 0.96
+				list.append(G.pane(g, Glass.rect(x0 + 0.04, x0 + 0.92, 0.3, 4.2), d, "mid" if r < 3 else "thick"))
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			Worlds.box(st, Vector3(0, 4.35, 0), Vector3(W * 2.0, 0.1, 0.1), Color("4a525c"))
+			st.set_material(Worlds.lit_mat)
+			var m := MeshInstance3D.new()
+			m.mesh = st.commit()
+			m.position = Vector3(0, 0, -d)
+			G.decor(g, m)
+			for p in list:
+				var pp: GPane = p
+				pp.on_break = func(): G.chain_break(list, "Domino!", 1)
 		# ---- tricks ----
 		"hinge":
 			# thick glass on a hinge: hit it near the far edge and it swings open
@@ -273,6 +488,26 @@ static func build(G, type: String, d: float, r: int) -> void:
 					var x0 := -W + i * 1.2
 					var col := c0 if (i == 1 or i == 2 or randf() < 0.4) else c1
 					G.pane(gi, Glass.rect(x0 + 0.03, x0 + 1.17, Y0, Y1), dz, "mid", col)
+
+
+## two door leaves that move as you come: "open" slide apart, "close" slide together, "stick" start to open and stop
+static func _doors(G, g: GGate, d: float, how: String, r: int) -> void:
+	for i in 2:
+		var sd := -1.0 if i == 0 else 1.0
+		var p: GPane = G.pane(g, Glass.rect(-HALF, 0.0, 0.05, 6.2) if i == 0 else Glass.rect(0.0, HALF, 0.05, 6.2), d, "mid" if r < 4 else "thick")
+		p.move = func(pp: GPane, t: float, ahead: float):
+			var k := clampf((24.0 - ahead) / 12.0, 0.0, 1.0)
+			var open := 0.0
+			match how:
+				"open":
+					open = k
+				"close":
+					open = 1.0 - k
+				"stick":
+					open = minf(k, 0.05) + (absf(sin(t * 40.0)) * 0.01 if k > 0.05 else 0.0)
+			open = open * open * (3.0 - 2.0 * open)
+			pp.node.transform = pp.base.translated(Vector3(sd * 4.6 * open, 0, 0))
+	G._frame(g, d, Color("9fe8e0"))
 
 
 ## the end of a level: a great turning wheel of glass with a golden heart

@@ -1,8 +1,17 @@
 # The 50 rooms of the endless run, written by hand; this checks them and writes scripts/rooms.gd
 import sys
 WORLDS=["cathedral","venice","lanterns","mosaic","sheesh"]
-SKY_OK=set("blocks pane split grid layers stack color_row tempered frosted slide rise hinge weak laminated shy spinner rotor prism mirror orbit blast snake shield halves flyin charge shutters drop".split())
-EXT={"layers":6.4,"frosted":1.6,"snake":10.4,"prism":19,"collapse":4.4,"boss":1}
+SKY_OK=set("giant slide_block fall_blocks scissors saw_disc diag_blade blade_line chessboard tile_rain rot_grid hole_glass tube twotone domino blocks pane split grid layers stack color_row tempered frosted slide rise hinge weak laminated shy spinner rotor prism mirror orbit blast snake shield halves flyin charge shutters drop".split())
+EXT={"layers":6.4,"frosted":1.6,"snake":10.4,"prism":19,"collapse":4.4,"boss":1,"fall_blocks":10,"blade_line":9,"door_line":12,"tube":9,"diag_blade":2.5}
+SKY_NO={"pendulum_blade","sensor_door","closing_doors","door_line","shutter_door","button_door","popout","pendulum","revolving","grille","collapse","doors"}
+# the star of each room: the glass it is about (put in two or three times, where it fits)
+STAR=["", "chessboard", "sensor_door", "pendulum_blade", "tile_rain", "giant", "scissors", "domino", "closing_doors", "blade_line",
+ "twotone", "slide_block", "rot_grid", "shutter_door", "diag_blade", "door_line", "fall_blocks", "hole_glass", "saw_disc", "giant",
+ "saw_disc", "blade_line", "tube", "popout", "scissors", "pendulum_blade", "fall_blocks", "sensor_door", "closing_doors", "diag_blade",
+ "chessboard", "giant", "rot_grid", "hole_glass", "button_door", "twotone", "slide_block", "domino", "tile_rain", "blade_line",
+ "door_line", "saw_disc", "fall_blocks", "tube", "popout", "shutter_door", "giant", "button_door", "scissors", "pendulum_blade"]
+# rooms where the whole room turns about you
+SPIN=[6, 13, 22, 28, 29, 35, 43, 45, 48]
 R=[
 # ---- Cathedral: learn the glass, then the prism; the rose window at the end
 ("c200","28 pane/0, 48 J, 58 split/0, 84 grid/0, 108 J, 116 tempered/0, 142 stack/0, 164 J, 172 color_row/0"),
@@ -64,35 +73,57 @@ NAMES={"c":"corridor","t":"tunnel","h":"hall","s":"sky"}
 SEG=16.0
 errs=[]
 out=[]
-for i,(secs,obs) in enumerate(R):
+
+def parse(secs):
     parts=[(NAMES[p[0]],float(p[1:])) for p in secs.split()]
-    if sum(l for _,l in parts)!=200: errs.append(f"room {i}: sections sum {sum(l for _,l in parts)}")
     spans=[];a=0.0
     for n,l in parts: spans.append((a,a+l,n)); a+=l
+    return spans
+
+def check(i, spans, ents):
+    e=[]
     def raw(x):
         for a,b,n in spans:
             if a<=x<b: return n
         return "corridor"
-    ents=[]
     prev_end=-99
-    for e in obs.split(","):
-        d,what=e.split()
-        d=float(d)
-        if what=="J": ents.append((d,"jars",0)); continue
-        t,h=what.split("/"); h=int(h)
-        ents.append((d,t,h))
+    for d,t,h in ents:
+        if t=="jars": continue
         ext=EXT.get(t,0)
-        if d<prev_end+12: errs.append(f"room {i}: {t}@{d} too close to the one before")
+        if d<prev_end+12: e.append(f"room {i}: {t}@{d} too close to the one before")
         prev_end=d+ext
-        if d+ext>182: errs.append(f"room {i}: {t}@{d} runs into the door")
-        for par in (0,8):  # the two ways a room sits on the 16 m grid
+        if d+ext>182: e.append(f"room {i}: {t}@{d} runs into the door")
+        if d<18: e.append(f"room {i}: {t}@{d} too near the start")
+        for par in (0,8):
             def sec_at(x):
                 k=(x+par)//SEG
                 return raw(k*SEG+SEG/2-par)
             for x in (d-4,d,d+ext+4):
-                s=sec_at(x)
-                if s=="sky" and t not in SKY_OK: errs.append(f"room {i}: {t}@{d} in the sky (par {par})")
-            if sec_at(d-4)!=sec_at(d+ext+4): errs.append(f"room {i}: {t}@{d} across a change of shape (par {par})")
+                if sec_at(x)=="sky" and (t not in SKY_OK or t in SKY_NO): e.append(f"room {i}: {t}@{d} in the sky (par {par})")
+            if sec_at(d-4)!=sec_at(d+ext+4): e.append(f"room {i}: {t}@{d} across a change of shape (par {par})")
+    return e
+
+for i,(secs,obs) in enumerate(R):
+    spans=parse(secs)
+    if spans[-1][1]!=200: errs.append(f"room {i}: sections sum {spans[-1][1]}")
+    ents=[]
+    for e in obs.split(","):
+        d,what=e.split()
+        d=float(d)
+        if what=="J": ents.append((d,"jars",0)); continue
+        t,h=what.split("/"); ents.append((d,t,int(h)))
+    errs+=check(i,spans,ents)
+    star=STAR[i]
+    if star:
+        put=0
+        for k in range(len(ents)):
+            if put>=3: break
+            d,t,h=ents[k]
+            if t in ("jars","boss"): continue
+            trial=ents[:k]+[(d,star,h)]+ents[k+1:]
+            if not check(i,spans,trial) and (k%2==1 or put==0):
+                ents=trial; put+=1
+        if put<2: print(f"room {i}: star {star} only {put} times")
     out.append((spans,ents))
 if len(R)!=50: errs.append(f"{len(R)} rooms")
 if errs:
@@ -104,6 +135,7 @@ lines=['## The 50 rooms of the endless run, made by hand: ten in each world, the
 for spans,ents in out:
     lines.append('\t['+', '.join(f'[{a:.0f}.0, {b:.0f}.0, "{n}"]' for a,b,n in spans if n!="corridor")+'],')
 lines.append(']')
+lines.append('const SPIN := '+str(SPIN))
 lines.append('const OBS := [')
 for spans,ents in out:
     lines.append('\t['+', '.join(f'[{d:.0f}, "{t}", {h}]' for d,t,h in ents)+'],')
@@ -119,6 +151,11 @@ static func section(r: int, local: float) -> String:
 		if local >= e[0] and local < e[1]:
 			return e[2]
 	return "corridor"
+
+
+## does the whole room turn about you?
+static func spins(r: int) -> bool:
+	return posmod(r, COUNT) in SPIN
 
 
 static func entries(r: int) -> Array:

@@ -68,6 +68,7 @@ var level_i := 0
 var last_kind := ""
 var look_now := {}
 var cam_pitch := -2.5
+var roll := 0.0
 var mood := -1
 var backdrop: MeshInstance3D
 var shadow_mat: StandardMaterial3D
@@ -1253,6 +1254,8 @@ func _process(delta: float) -> void:
 			small = "%s · FINAL ROOM" % wn.to_upper()
 		if room >= Rooms.COUNT:
 			small += "  ·  REMIX %d" % (room / Rooms.COUNT)
+		if Rooms.spins(room):
+			small += "  ·  THE ROOM TURNS"
 		var L: Dictionary = Worlds.look(Rooms.world_of(room), k % Rooms.PER_WORLD)
 		hud.show_title(L.name, small, (L.sun as Color).lerp(Color.WHITE, 0.3))
 		hud.flash_screen((L.sun as Color), 0.35, 0.7)
@@ -1315,14 +1318,22 @@ func _place_camera(dt: float) -> void:
 	if dt <= 0.0 and not look_now.is_empty():
 		look_now["sky"] = look_to["sky"]
 		_apply_look()
-	cam.rotation = Vector3(deg_to_rad(cam_pitch), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1)
+	# in some rooms the whole room turns about you: right round in a tunnel, rocking elsewhere
+	if mode == "endless" and Rooms.spins(_room_of(dist)) and state == S.PLAY:
+		if section_at(dist) == "tunnel":
+			roll += dt * 0.5
+		else:
+			roll = lerp_angle(roll, sin(t * 0.55) * 0.26, 1.0 - exp(-dt * 2.0))
+	else:
+		roll = lerp_angle(roll, 0.0, 1.0 - exp(-dt * 1.5))
+	cam.rotation = Vector3(deg_to_rad(cam_pitch), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1 + roll)
 	cam.fov = 70.0 + clampf((speed - 9.0) * 0.9, 0.0, 8.0) + fov_kick
 
 
 func _move_gates() -> void:
 	for g in gates:
 		var ahead: float = g.d - dist
-		if ahead < -6.0 or ahead > 70.0:
+		if ahead < -6.0 or ahead > 160.0:
 			continue
 		for p in g.panes:
 			if not p.alive or p.falling or p.opened:
@@ -1867,6 +1878,41 @@ func break_all(list: Array, text: String, bonus: int) -> void:
 	score += 30
 	hud.show_toast(text, Color("ffc861"), 0.5)
 	sfx.play("multi", -4.0)
+
+
+## glass that is all one piece: when one part breaks the rest goes with it, at once
+func link(list: Array) -> void:
+	for p in list:
+		var pp: GPane = p
+		var prev: Callable = pp.on_break
+		pp.on_break = func():
+			if prev.is_valid():
+				prev.call()
+			var k := 0
+			for q in list:
+				if q.alive:
+					var qq: GPane = q
+					var delay := 0.015 * k
+					k += 1
+					var tt := [0.0]
+					anims.append(func(dt: float) -> bool:
+						tt[0] += dt
+						if tt[0] < delay:
+							return true
+						if qq.alive:
+							break_pane(qq, Vector2.ZERO, Vector3(0, 0, -1), false, k > 1)
+						return false)
+
+
+## a heavy block landing: the ground shakes
+func thump(at: Vector3) -> void:
+	if absf(-at.z - dist) > 60.0:
+		return
+	shake = maxf(shake, 0.45)
+	sfx.play("thud", 2.0, 0.55)
+	sfx.play("heavy", -10.0, 0.6)
+	fx.spark(at, Color("cfe8e4"), 18, 0.8)
+	vibe(40)
 
 
 ## break one, and the rest follow one by one (nearest first), each ringing a note higher

@@ -21,6 +21,8 @@ Each world changes shape as you go: narrow round **tunnels**, wide **great halls
 
 Plain glass that looks like glass: thin (tinkles), mid, thick (2 hits) and slab (3 hits), which you can see are thick, glass bricks that break into heavy chunks with a deep crunch, mirror (bounces the marble back), tempered (breaks into crumbs), laminated (sags, then falls), frosted (hides what is behind), blast glass (breaks everything near it). The glass moves too: it drops from the sky, slides, rises, swings open on a hinge, spins, swings as a pendulum, flies in, shuts in time with the music, dodges the marble, splits in two and falls when its supports break. Some panes only break at a marked weak spot.
 
+More glass: giant cubes of glass two metres deep, blocks that slide or come crashing down from above, long pendulum blades, scissor blades, round saw blades, diagonal blades and lines of turning blades; doors of glass that open by themselves (or stick, or slide shut), shutters, revolving and button doors; chessboards of thick and thin squares, falling tiles, a turning grid, tiles that slide out of the walls, a pane with a hole in it, rings of glass to fly through, half-thin half-thick panes, dominoes, and brick walls that come down in one. Each room of the endless run is built round one of these, and in some rooms the whole room turns about you.
+
 **Prism chain:** only the prism's own glass is tinted. Hitting a prism fires beams that break every pane of its colour. Breaking panes of the same colour in a row builds a colour combo; every five in a row give two marbles.
 
 ## Build
