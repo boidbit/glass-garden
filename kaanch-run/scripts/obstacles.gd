@@ -11,13 +11,13 @@ const Y1 := 3.9
 # what unlocks when (by room in the endless run)
 const POOL := [
 	["pane", "split", "grid", "layers", "stack", "color_row", "tempered", "frosted"],
-	["slide", "doors", "rise", "hinge", "weak", "laminated", "shy"],
+	["slide", "doors", "rise", "hinge", "weak", "laminated", "shy", "blocks"],
 	["spinner", "rotor", "pendulum", "prism", "mirror", "orbit", "blast"],
 	["snake", "shield", "grille", "collapse", "halves"],
 	["flyin", "shutters", "revolving", "charge"],
 ]
 # the ones that look right floating in the open sky (nothing standing on a floor or hanging from a roof)
-const SKY_OK := ["pane", "split", "grid", "layers", "stack", "color_row", "tempered", "frosted", "slide", "rise", "hinge", "weak", "laminated", "shy", "spinner", "rotor", "prism", "mirror", "orbit", "blast", "snake", "shield", "halves", "flyin", "charge", "shutters"]
+const SKY_OK := ["blocks", "pane", "split", "grid", "layers", "stack", "color_row", "tempered", "frosted", "slide", "rise", "hinge", "weak", "laminated", "shy", "spinner", "rotor", "prism", "mirror", "orbit", "blast", "snake", "shield", "halves", "flyin", "charge", "shutters"]
 # gentler ones for the calm mode
 const CALM := ["pane", "split", "grid", "layers", "stack", "color_row", "tempered", "slide", "rise", "spinner", "orbit", "prism", "blast", "collapse", "halves", "rotor"]
 
@@ -185,6 +185,26 @@ static func build(G, type: String, d: float, r: int) -> void:
 					var bs := Basis(Vector3(0, 1, 0), off + t * w)
 					pp.node.transform = Transform3D(bs, Vector3(ax, 0, pp.base.origin.z)) * Transform3D(Basis(), Vector3(pp.base.origin.x, pp.base.origin.y, 0))
 			G.post(g, Vector3(ax, 0, -d))
+		"drop":
+			# glass falling from the sky into the way as you come
+			var n := 1 if r < 2 else 2
+			for i in n:
+				var poly := full() if n == 1 else (full(-W, 0.0) if i == 0 else full(0.0, W))
+				var p: GPane = G.pane(g, poly, d, "mid" if r < 3 else ["mid", "thick"].pick_random(), -1)
+				var late := 2.5 * i
+				p.move = func(pp: GPane, _t: float, ahead: float):
+					var k := clampf((ahead - 13.0 - late) / 14.0, 0.0, 1.0)
+					pp.node.transform = pp.base.translated(Vector3(0, 16.0 * k * k, 0))
+		"blocks":
+			# a wall of glass bricks with one gap: break your way through, or find the gap
+			var gap := randi() % 3
+			for cx in 3:
+				for cy in 3:
+					if cx == gap and cy == 1:
+						continue
+					var x0 := -W + cx * 1.6
+					var y0 := Y0 + cy * 1.135
+					G.pane(g, Glass.rect(x0 + 0.04, x0 + 1.56, y0 + 0.04, y0 + 1.09), d, "block" if (cx + cy) % 2 == 0 else "thick")
 		# ---- tricks ----
 		"hinge":
 			# thick glass on a hinge: hit it near the far edge and it swings open

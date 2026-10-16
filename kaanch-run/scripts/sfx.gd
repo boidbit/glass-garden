@@ -193,7 +193,33 @@ func _shatter(big: float) -> PackedFloat32Array:
 	return b
 
 
+## thick glass giving way: a low crunch, a thump, heavy chunks landing
+func _heavy() -> PackedFloat32Array:
+	var b := _buf(1.1)
+	_noise(b, 0.0, 0.5, 0.9, 11.0, 0.12)
+	_noise(b, 0.0, 0.08, 0.5, 40.0, 0.5)
+	for i in int(RATE * 0.35):
+		var t := float(i) / RATE
+		b[i] += sin(TAU * (95.0 - 50.0 * t) * t) * 0.9 * exp(-t * 11.0)
+	for k in 10:
+		_ping(b, pow(randf(), 1.4) * 0.35, randf_range(1100.0, 3200.0), randf_range(0.05, 0.12), randf_range(20.0, 35.0), 0.16)
+	for k in 7:
+		var t0 := randf_range(0.25, 0.8)
+		_noise(b, t0, 0.05, randf_range(0.25, 0.45), 70.0, 0.25)
+		_ping(b, t0, randf_range(380.0, 820.0), 0.18, 40.0, 0.06)
+	return b
+
+
 func _build_all() -> void:
+	streams["heavy"] = _wav(_heavy())
+	# a marble knocking on thick glass that holds
+	var th := _buf(0.35)
+	_noise(th, 0.0, 0.06, 0.6, 60.0, 0.2)
+	for i in th.size():
+		var t := float(i) / RATE
+		th[i] += sin(TAU * 170.0 * t) * 0.7 * exp(-t * 26.0)
+	_ping(th, 0.0, 2200.0, 0.12, 45.0)
+	streams["thud"] = _wav(th)
 	streams["shatter0"] = _wav(_shatter(1.0))
 	streams["shatter1"] = _wav(_shatter(0.7))
 	streams["shatter2"] = _wav(_shatter(0.45))

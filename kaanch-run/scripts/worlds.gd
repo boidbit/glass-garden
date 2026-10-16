@@ -10,11 +10,11 @@ const SEG := 16.0
 
 const LIST := ["cathedral", "venice", "lanterns", "mosaic", "sheesh"]
 const DEFS := {
-	"cathedral": {"name": "Cathedral", "bg": Color("120d18"), "amb": Color("4a3e52"), "sun": Color("ffd9a8"), "sun_e": 0.8, "rim": Color("fff3d6"), "fog": 0.024, "accent": Color("ffcf6b"), "dim": 0.6, "gdim": 0.55},
-	"venice": {"name": "Venice", "bg": Color("1d3550"), "amb": Color("5a6e88"), "sun": Color("ffc9a0"), "sun_e": 0.75, "rim": Color("e8f8ff"), "fog": 0.016, "accent": Color("ff8a5c"), "dim": 0.62, "gdim": 0.8},
-	"lanterns": {"name": "Lantern Night", "bg": Color("05070f"), "amb": Color("2a3050"), "sun": Color("9fb2ff"), "sun_e": 0.45, "rim": Color("ffe9c4"), "fog": 0.026, "accent": Color("ff9f45"), "dim": 0.7, "gdim": 0.75},
-	"mosaic": {"name": "Mosaic Court", "bg": Color("3a2030"), "amb": Color("7a5a5a"), "sun": Color("ffb37a"), "sun_e": 0.8, "rim": Color("fff1d8"), "fog": 0.016, "accent": Color("1fb5b5"), "dim": 0.6, "gdim": 0.9},
-	"sheesh": {"name": "Mirror Palace", "bg": Color("0c0306"), "amb": Color("4a2228"), "sun": Color("ffdca0"), "sun_e": 0.7, "rim": Color("fff0c8"), "fog": 0.024, "accent": Color("ffcc66"), "dim": 0.6, "gdim": 0.6},
+	"cathedral": {"name": "Cathedral", "bg": Color("120d18"), "amb": Color("4a3e52"), "sun": Color("ffd9a8"), "sun_e": 0.8, "rim": Color("eef6f4"), "fog": 0.024, "accent": Color("ffcf6b"), "dim": 0.6, "gdim": 0.55},
+	"venice": {"name": "Venice", "bg": Color("1d3550"), "amb": Color("5a6e88"), "sun": Color("ffc9a0"), "sun_e": 0.75, "rim": Color("eef6f4"), "fog": 0.016, "accent": Color("ff8a5c"), "dim": 0.62, "gdim": 0.8},
+	"lanterns": {"name": "Lantern Night", "bg": Color("05070f"), "amb": Color("2a3050"), "sun": Color("9fb2ff"), "sun_e": 0.45, "rim": Color("eef6f4"), "fog": 0.026, "accent": Color("ff9f45"), "dim": 0.7, "gdim": 0.75},
+	"mosaic": {"name": "Mosaic Court", "bg": Color("3a2030"), "amb": Color("7a5a5a"), "sun": Color("ffb37a"), "sun_e": 0.8, "rim": Color("eef6f4"), "fog": 0.016, "accent": Color("1fb5b5"), "dim": 0.6, "gdim": 0.9},
+	"sheesh": {"name": "Mirror Palace", "bg": Color("0c0306"), "amb": Color("4a2228"), "sun": Color("ffdca0"), "sun_e": 0.7, "rim": Color("eef6f4"), "fog": 0.024, "accent": Color("ffcc66"), "dim": 0.6, "gdim": 0.6},
 }
 # the colours of each world's tunnels, halls and skies
 const TUNE := {

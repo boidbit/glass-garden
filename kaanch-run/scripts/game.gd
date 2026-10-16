@@ -355,7 +355,7 @@ func _start(m: String, from_room := 0) -> void:
 	mode = m
 	_reset(m, from_room)
 	state = S.PLAY
-	balls = START_BALLS + (5 if m == "level1" else 0)
+	balls = START_BALLS + 5
 	jar_streak = 0
 	multi = 1
 	over_t = -1.0
@@ -607,7 +607,7 @@ func _extras(d0: float, sec: String) -> void:
 
 
 func _bonus_pane(g: GGate, poly: PackedVector2Array, d: float, color_id: int, pts := 15) -> GPane:
-	var p := pane(g, poly, d, "thin" if randf() < 0.6 else "mid", color_id, false)
+	var p := pane(g, poly, d, "thin" if randf() < 0.6 else "mid", -1 if randf() < 0.75 else color_id, false)
 	p.bonus = pts
 	return p
 
@@ -740,7 +740,7 @@ func _spawn_in(a: float, b: float) -> void:
 			gap = 30.0 + randf() * 8.0
 		if kind in ["layers", "prism", "snake", "frosted"]:
 			gap += 12.0 if kind == "prism" else 6.0
-		if sec != "sky" and randf() < 0.45:
+		if sec != "sky" and randf() < 0.55:
 			_jars(d + gap * 0.5)
 		next_obs += gap
 
@@ -782,15 +782,16 @@ func rng_kind(r: int) -> String:
 	var x := randf()
 	if r >= 3 and x < 0.1:
 		return "slab"
-	if x < 0.45:
+	if x < 0.42:
 		return "thin"
-	if x < 0.8 or r < 1:
+	if x < 0.75 or r < 1:
 		return "mid"
 	return "thick"
 
 
-func rng_color(p: float) -> int:
-	return randi() % Glass.COLORS.size() if randf() < p else -1
+## ordinary glass is plain glass; colour is kept for the prism, the colour rows and the finale
+func rng_color(_p: float) -> int:
+	return -1
 
 
 ## turn a pane about a point in the plane across the way
@@ -1459,8 +1460,15 @@ func _crack(p: GPane, lp: Vector2) -> void:
 		k[0] = minf(1.0, k[0] + dt / 0.12)
 		qq.scale = Vector3.ONE * (0.2 + 0.8 * k[0])
 		return k[0] < 1.0)
-	sfx.play("crack", -2.0, randf_range(0.9, 1.1))
-	vibe(15)
+	# the thicker the glass, the deeper the knock
+	var th: float = Glass.KINDS[p.kind].t
+	if th >= 0.3:
+		sfx.play("thud", 0.0, randf_range(0.85, 1.0) - th * 0.2)
+		sfx.play("crack", -7.0, 0.7)
+		vibe(30)
+	else:
+		sfx.play("crack", -2.0, randf_range(0.9, 1.1))
+		vibe(15)
 
 
 func _mesh_shard(cell: PackedVector2Array, kind: String, color_id: int) -> MeshInstance3D:
@@ -1531,8 +1539,10 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		var v := away.normalized() * randf_range(1.5, 4.5) + dir * randf_range(2.0, 6.0) + Vector3(0, randf_range(0.5, 2.5), 0)
 		if crash:
 			v = away.normalized() * randf_range(2.0, 5.0) + Vector3(0, randf_range(1.0, 3.0), -speed * 0.6)
+		if K.t >= 0.3:
+			v *= 0.55
 		var axis := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
-		shards.append({"node": mi, "v": v, "axis": axis, "w": randf_range(3.0, 11.0), "life": 0.0})
+		shards.append({"node": mi, "v": v, "axis": axis, "w": randf_range(3.0, 11.0) * (0.5 if K.t >= 0.3 else 1.0), "life": 0.0})
 	p.node.queue_free()
 	var cap := 260 if save.quality > 0 else 120
 	while shards.size() > cap:
@@ -1543,8 +1553,13 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 	fx.flash(hit_w, L[2], 1.5 + minf(area, 6.0) * 0.4)
 	fx.spark(hit_w, L[2], 22 + int(minf(area, 8.0) * 4), 1.2)
 	if not quiet:
-		var v := clampi(int(3.0 - area * 0.4), 0, 2)
-		sfx.play("shatter%d" % v, -1.0 if area > 3.0 else -4.0, randf_range(0.92, 1.12))
+		if K.t >= 0.3:
+			sfx.play("heavy", 0.0, randf_range(0.92, 1.05) - minf(K.t, 0.9) * 0.15)
+			sfx.play("shatter2", -9.0, 0.75)
+		else:
+			var v := clampi(int(3.0 - area * 0.4), 0, 2)
+			var pitch := randf_range(1.12, 1.3) if p.kind == "thin" else randf_range(0.92, 1.1)
+			sfx.play("shatter%d" % v, -1.0 if area > 3.0 else -4.0, pitch)
 		if p.color_id >= 0:
 			sfx.note(combo_n)
 	if not crash and area > 3.0:
@@ -1942,7 +1957,7 @@ func _auto_play() -> void:
 		if not Glass.inside(p.poly, Vector2(l.x, l.y), 0.3):
 			continue
 		var id: int = p.get_instance_id()
-		if _fired.has(id) and t - _fired[id] < 0.28:
+		if _fired.has(id) and t - _fired[id] < 0.55:
 			continue
 		var aim := Vector3(cam.position.x, EYE, gz)
 		if p.weak != Vector2.INF:
@@ -1960,7 +1975,7 @@ func _auto_play() -> void:
 		if ahead < 8.0 or ahead > 26.0:
 			continue
 		var id: int = p.get_instance_id()
-		if _fired.has(id) and t - _fired[id] < 0.6:
+		if _fired.has(id) and t - _fired[id] < 1.0:
 			continue
 		if ahead + 6.0 < best_d:
 			best_d = ahead + 6.0

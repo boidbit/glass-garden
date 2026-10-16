@@ -4,20 +4,22 @@ extends RefCounted
 
 # every kind of glass: how thick, how many hits, how it looks, how many pieces it breaks into
 const KINDS := {
-	"thin": {"t": 0.03, "hp": 1, "face": Color(0.74, 0.94, 1.0, 0.3), "side": Color(0.70, 0.95, 1.0, 0.6), "rim": 0.055, "pieces": 14},
-	"mid": {"t": 0.06, "hp": 1, "face": Color(0.56, 0.88, 1.0, 0.4), "side": Color(0.50, 0.88, 0.95, 0.8), "rim": 0.065, "pieces": 11},
-	"thick": {"t": 0.16, "hp": 2, "face": Color(0.42, 0.86, 0.80, 0.48), "side": Color(0.25, 0.75, 0.66, 0.9), "rim": 0.07, "pieces": 9},
-	"slab": {"t": 0.3, "hp": 3, "face": Color(0.26, 0.70, 0.62, 0.62), "side": Color(0.14, 0.55, 0.48, 0.95), "rim": 0.08, "pieces": 8},
+	"thin": {"t": 0.04, "hp": 1, "face": Color(0.82, 0.95, 0.97, 0.16), "side": Color(0.72, 0.92, 0.9, 0.7), "rim": Color(0.92, 1.0, 1.0, 0.5), "rim_w": 0.035, "pieces": 14},
+	"mid": {"t": 0.1, "hp": 1, "face": Color(0.7, 0.92, 0.92, 0.24), "side": Color(0.55, 0.85, 0.82, 0.85), "rim": Color(0.85, 0.98, 0.97, 0.6), "rim_w": 0.045, "pieces": 11},
+	"thick": {"t": 0.34, "hp": 2, "face": Color(0.5, 0.82, 0.78, 0.36), "side": Color(0.26, 0.6, 0.55, 0.94), "rim": Color(0.6, 0.9, 0.84, 0.85), "rim_w": 0.08, "pieces": 8},
+	"slab": {"t": 0.6, "hp": 3, "face": Color(0.38, 0.72, 0.66, 0.5), "side": Color(0.18, 0.48, 0.44, 0.97), "rim": Color(0.5, 0.82, 0.76, 0.9), "rim_w": 0.1, "pieces": 7},
+	# a brick of glass: very thick, breaks into heavy chunks
+	"block": {"t": 0.9, "hp": 2, "face": Color(0.45, 0.78, 0.72, 0.44), "side": Color(0.2, 0.52, 0.47, 0.96), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.09, "pieces": 6},
 	# a mirror: silvered, the first ball bounces off it
-	"mirror": {"t": 0.05, "hp": 2, "face": Color(0.9, 0.93, 0.97, 0.94), "side": Color(0.55, 0.6, 0.66, 1.0), "rim": 0.06, "pieces": 10},
+	"mirror": {"t": 0.08, "hp": 2, "face": Color(0.85, 0.88, 0.92, 0.94), "side": Color(0.5, 0.55, 0.6, 1.0), "rim": Color(0.9, 0.93, 0.96, 0.8), "rim_w": 0.05, "pieces": 10},
 	# tempered: bursts into little cubes
-	"tempered": {"t": 0.04, "hp": 1, "face": Color(0.66, 0.95, 0.82, 0.34), "side": Color(0.55, 0.9, 0.75, 0.75), "rim": 0.05, "pieces": 5},
+	"tempered": {"t": 0.07, "hp": 1, "face": Color(0.72, 0.93, 0.88, 0.24), "side": Color(0.55, 0.85, 0.78, 0.8), "rim": Color(0.85, 0.98, 0.95, 0.55), "rim_w": 0.04, "pieces": 5},
 	# laminated: cracks and sags first, then falls in one sheet
-	"laminated": {"t": 0.07, "hp": 2, "face": Color(0.93, 0.96, 0.99, 0.46), "side": Color(0.8, 0.86, 0.9, 0.9), "rim": 0.06, "pieces": 7},
+	"laminated": {"t": 0.14, "hp": 2, "face": Color(0.88, 0.93, 0.95, 0.36), "side": Color(0.72, 0.8, 0.84, 0.9), "rim": Color(0.92, 0.96, 0.98, 0.6), "rim_w": 0.05, "pieces": 7},
 	# frosted: you cannot see what is behind it
-	"frosted": {"t": 0.05, "hp": 1, "face": Color(0.93, 0.96, 1.0, 0.84), "side": Color(0.85, 0.92, 1.0, 0.95), "rim": 0.05, "pieces": 12},
-	# blast glass: when it breaks it takes the glass round it with it
-	"blast": {"t": 0.07, "hp": 1, "face": Color(1.0, 0.5, 0.22, 0.55), "side": Color(1.0, 0.36, 0.16, 0.95), "rim": 0.07, "pieces": 12},
+	"frosted": {"t": 0.08, "hp": 1, "face": Color(0.86, 0.9, 0.92, 0.8), "side": Color(0.78, 0.85, 0.88, 0.95), "rim": Color(0.95, 0.97, 0.98, 0.6), "rim_w": 0.04, "pieces": 12},
+	# blast glass: when it breaks it takes the glass round it with it (the one glass with a warning colour)
+	"blast": {"t": 0.12, "hp": 1, "face": Color(0.95, 0.55, 0.3, 0.45), "side": Color(0.85, 0.38, 0.18, 0.95), "rim": Color(1.0, 0.7, 0.4, 0.9), "rim_w": 0.06, "pieces": 12},
 }
 
 # the colours of coloured glass (for the colour combo and the prism)
@@ -252,16 +254,13 @@ static func look(kind: String, color_id := -1) -> Array:
 	var K: Dictionary = KINDS[kind]
 	var face: Color = K.face
 	var side: Color = K.side
-	var rim := Color(0.92, 1.0, 1.0, 0.95)
+	var rim: Color = K.rim
 	if color_id >= 0:
+		# glass of a colour (for the prism and the colour combo): only a tint, it is still glass
 		var c: Color = COLORS[color_id]
-		face = Color(lerpf(c.r, 1.0, 0.25), lerpf(c.g, 1.0, 0.25), lerpf(c.b, 1.0, 0.25), maxf(face.a, 0.42))
-		side = Color(c.r * 0.85, c.g * 0.85, c.b * 0.85, 0.92)
-		rim = Color(lerpf(c.r, 1.0, 0.55), lerpf(c.g, 1.0, 0.55), lerpf(c.b, 1.0, 0.55), 1.0)
-	elif kind == "blast":
-		rim = Color(1.0, 0.75, 0.4, 1.0)
-	elif kind == "mirror":
-		rim = Color(1, 1, 1, 1)
+		face = Color(lerpf(face.r, c.r, 0.45), lerpf(face.g, c.g, 0.45), lerpf(face.b, c.b, 0.45), face.a + 0.08)
+		side = Color(lerpf(side.r, c.r, 0.5), lerpf(side.g, c.g, 0.5), lerpf(side.b, c.b, 0.5), side.a)
+		rim = Color(lerpf(rim.r, c.r, 0.5), lerpf(rim.g, c.g, 0.5), lerpf(rim.b, c.b, 0.5), rim.a)
 	return [face, side, rim]
 
 
@@ -300,7 +299,7 @@ static func slab_mesh(poly: PackedVector2Array, kind: String, rim_scale := 1.0, 
 	st.set_material(mirror_mat if mirror else glass_mat)
 	var mesh := st.commit()
 	# the edges: a thin bright band just inside the outline, on both faces
-	var w: float = K.rim * rim_scale * 1.4
+	var w: float = K.rim_w * rim_scale
 	var cc := centroid(poly)
 	var inner := PackedVector2Array()
 	for p in poly:

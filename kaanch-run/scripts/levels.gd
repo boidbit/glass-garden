@@ -12,7 +12,7 @@ const L1 := [
 	[30, "pane", 0], [52, "jars", 0], [66, "split", 0], [92, "grid", 0], [118, "tempered", 0], [132, "jars", 0],
 	[158, "color_row", 0], [184, "laminated", 1], [206, "layers", 1], [230, "jars", 1],
 	[254, "doors", 1],
-	[290, "weak", 1], [314, "hinge", 1], [330, "jars", 1], [342, "slide", 1], [366, "shy", 1],
+	[290, "weak", 1], [314, "hinge", 1], [330, "jars", 1], [342, "blocks", 1], [366, "shy", 1],
 	[398, "spinner", 2],
 	[432, "drop", 1], [454, "orbit", 2], [476, "mirror", 2], [490, "prism", 2], [530, "drop", 2], [548, "blast", 2],
 	[574, "collapse", 3], [598, "snake", 3], [618, "jars", 3], [630, "rotor", 3], [652, "shield", 3], [672, "jars", 3],
