@@ -25,3 +25,4 @@ var falling := false
 var charge := -1.0             # >= 0: it charges up as you come; break it before it is full
 var prism := false             # a prism node (shoot it: the panes of its colour go)
 var sag := 0.0
+var bonus := 0          # extra score: glass that is only there to be broken, not in your way

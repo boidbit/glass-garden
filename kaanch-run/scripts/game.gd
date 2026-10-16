@@ -67,6 +67,10 @@ var next_obs := 30.0
 var level_i := 0
 var last_kind := ""
 var look_now := {}
+var cam_pitch := -2.5
+var backdrop: MeshInstance3D
+var backdrop_im: ImmediateMesh
+var sec_now := "corridor"
 var look_to := {}
 
 var marble_mats: Array = []
@@ -183,7 +187,7 @@ func _make_scene() -> void:
 	cam = Camera3D.new()
 	cam.fov = 72.0
 	cam.near = 0.05
-	cam.far = 200.0
+	cam.far = 260.0
 	add_child(cam)
 	cam.current = true
 	sun = DirectionalLight3D.new()
@@ -201,6 +205,18 @@ func _make_scene() -> void:
 	env.fog_sky_affect = 0.0
 	we.environment = env
 	add_child(we)
+	# a far wall of sky colour that follows the eye: plain in the halls, a gradient in the open sky
+	backdrop_im = ImmediateMesh.new()
+	backdrop = MeshInstance3D.new()
+	backdrop.mesh = backdrop_im
+	var bm := StandardMaterial3D.new()
+	bm.vertex_color_use_as_albedo = true
+	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bm.disable_fog = true
+	bm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	backdrop.material_override = bm
+	backdrop.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(backdrop)
 	glow_tex = _glow_texture()
 	crack_tex = _crack_texture()
 	fx = Fx.new()
@@ -236,7 +252,7 @@ func _make_scene() -> void:
 	jar_mat.metallic = 0.2
 	jar_mat.emission_enabled = true
 	jar_mat.emission = Color("9fe8ff")
-	jar_mat.emission_energy_multiplier = 0.35
+	jar_mat.emission_energy_multiplier = 0.9
 	hub_mat = StandardMaterial3D.new()
 	hub_mat.albedo_color = Color(1.0, 0.86, 0.45, 0.9)
 	hub_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -481,7 +497,9 @@ func _set_world(w: String, now := false) -> void:
 		return
 	world = w
 	var D: Dictionary = Worlds.def(w)
-	look_to = {"bg": D.bg, "amb": D.amb, "sun": D.sun, "rim": D.rim, "sun_e": D.sun_e, "fog": D.fog}
+	var T: Dictionary = Worlds.TUNE[w]
+	var sky_k: float = look_to.get("sky", 0.0)
+	look_to = {"bg": D.bg, "amb": D.amb, "sun": D.sun, "rim": D.rim, "sun_e": D.sun_e, "fog": D.fog, "dim": D.dim, "gdim": D.gdim, "sky": sky_k, "sky_top": T.sky_top, "sky_hor": T.sky_hor, "ground": T.ground}
 	if now or look_now.is_empty():
 		look_now = look_to.duplicate()
 	_apply_look()
@@ -490,17 +508,35 @@ func _set_world(w: String, now := false) -> void:
 
 
 func _apply_look() -> void:
-	env.background_color = look_now.bg
-	env.fog_light_color = look_now.bg
+	var k: float = look_now.sky
+	var bg: Color = look_now.bg
+	var hor: Color = bg.lerp(look_now.sky_hor, k)
+	env.background_color = hor
+	env.fog_light_color = hor
 	env.ambient_light_color = look_now.amb
-	env.fog_density = look_now.fog
+	env.fog_density = lerpf(look_now.fog, 0.007, k)
+	var top: Color = bg.lerp(look_now.sky_top, k)
+	var low: Color = bg.lerp(look_now.ground.lerp(look_now.sky_hor, 0.35), k)
+	backdrop_im.clear_surfaces()
+	backdrop_im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rows := [[150.0, top], [12.0, hor.lerp(top, 0.25)], [-4.0, hor], [-30.0, low], [-150.0, low]]
+	for i in rows.size() - 1:
+		var y0: float = rows[i][0]
+		var y1: float = rows[i + 1][0]
+		var c0: Color = rows[i][1]
+		var c1: Color = rows[i + 1][1]
+		for v in [[-400.0, y0, c0], [400.0, y0, c0], [400.0, y1, c1], [-400.0, y0, c0], [400.0, y1, c1], [-400.0, y1, c1]]:
+			backdrop_im.surface_set_color(v[2])
+			backdrop_im.surface_add_vertex(Vector3(v[0], v[1], 0))
+	backdrop_im.surface_end()
 	sun.light_color = look_now.sun
 	sun.light_energy = look_now.sun_e
 	Glass.rim_mat.albedo_color = look_now.rim
+	Worlds.set_dim(look_now.dim, look_now.gdim)
 
 
 func _look_step(dt: float) -> void:
-	var k := 1.0 - exp(-dt * 1.5)
+	var k := 1.0 - exp(-dt * 1.2)
 	var changed := false
 	for key in look_to.keys():
 		var a = look_now[key]
@@ -519,14 +555,135 @@ func _look_step(dt: float) -> void:
 func _stream() -> void:
 	while next_seg * SEG < dist + 150.0:
 		var d0 := next_seg * SEG
-		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13)
+		var sec := section_at(d0 + 1.0)
+		var prev := section_at(d0 - 1.0) if d0 >= SEG else "corridor"
+		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev)
 		root3d.add_child(seg)
 		segs.append({"node": seg, "d": d0})
+		_extras(d0, sec)
 		_spawn_in(d0, d0 + SEG)
 		next_seg += 1
 	while segs.size() and segs[0].d + SEG < dist - 6.0:
 		segs[0].node.queue_free()
 		segs.pop_front()
+
+
+# ---------- the shape of the way: corridor, tunnel, great hall or open sky ----------
+func _sec_raw(d: float) -> String:
+	if mode == "menu" or mode == "gallery":
+		return "corridor"
+	if mode == "level1":
+		for e in Levels.L1_SECT:
+			if d >= e[0] and d < e[1]:
+				return e[2]
+		return "corridor"
+	var r := _room_of(d)
+	var local := d - r * ROOM_LEN
+	var pair: Array = Worlds.SECT[Worlds.world_of(r)][(r / Worlds.LIST.size()) % 2]
+	if local >= 32.0 and local < 96.0:
+		return pair[0]
+	if local >= 112.0 and local < 176.0:
+		return pair[1]
+	return "corridor"
+
+
+## the same for every point of one 16 m piece
+func section_at(d: float) -> String:
+	var i := floori(d / SEG)
+	return _sec_raw(i * SEG + SEG * 0.5)
+
+
+## glass that is only there to be broken: on islands below the sky, on racks at the sides of a hall
+func _extras(d0: float, sec: String) -> void:
+	if mode == "menu" or mode == "gallery" or d0 < 1.0:
+		return
+	if sec == "sky":
+		if randf() < 0.8:
+			_island(d0 + randf_range(3.0, 13.0))
+	elif sec == "hall":
+		_side_bonus(d0 + randf_range(2.0, 7.0), -1.0 if randf() < 0.5 else 1.0)
+		if randf() < 0.6:
+			_side_bonus(d0 + randf_range(9.0, 14.0), -1.0 if randf() < 0.5 else 1.0)
+
+
+func _bonus_pane(g: GGate, poly: PackedVector2Array, d: float, color_id: int, pts := 15) -> GPane:
+	var p := pane(g, poly, d, "thin" if randf() < 0.6 else "mid", color_id, false)
+	p.bonus = pts
+	return p
+
+
+## a little floating island below the way, with glass on it to break from above
+func _island(d: float) -> void:
+	var g := new_gate("bonus", d)
+	var T: Dictionary = Worlds.TUNE[_world_at(d)]
+	var acc: Color = Worlds.def(_world_at(d)).accent
+	var sd := -1.0 if randf() < 0.5 else 1.0
+	var x := randf_range(1.0, 6.0) * sd
+	var y := randf_range(-7.0, -3.5)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	Worlds.box(st, Vector3(0, -0.3, 0), Vector3(4.6, 0.6, 4.0), T.floor_a)
+	Worlds.box(st, Vector3(0, -1.0, 0), Vector3(3.4, 0.8, 3.0), T.floor_b * 0.8)
+	Worlds.box(st, Vector3(0, -1.8, 0), Vector3(2.0, 0.8, 1.8), T.floor_b * 0.6)
+	st.set_material(Worlds.lit_mat)
+	var m := MeshInstance3D.new()
+	m.mesh = st.commit()
+	var gs := SurfaceTool.new()
+	gs.begin(Mesh.PRIMITIVE_TRIANGLES)
+	Worlds.box(gs, Vector3(0, -0.02, 2.02), Vector3(4.6, 0.08, 0.06), acc)
+	Worlds.box(gs, Vector3(0, -0.02, -2.02), Vector3(4.6, 0.08, 0.06), acc)
+	Worlds.box(gs, Vector3(2.32, -0.02, 0), Vector3(0.06, 0.08, 4.0), acc)
+	Worlds.box(gs, Vector3(-2.32, -0.02, 0), Vector3(0.06, 0.08, 4.0), acc)
+	gs.set_material(Worlds.glow_mat)
+	gs.commit(m.mesh)
+	m.position = Vector3(x, y, -d)
+	decor(g, m)
+	var c0 := randi() % Glass.COLORS.size()
+	match randi() % 3:
+		0:
+			# a glass house: three panes side by side
+			for i in 3:
+				var x0 := x - 1.8 + i * 1.2
+				_bonus_pane(g, Glass.rect(x0 + 0.03, x0 + 1.17, y, y + randf_range(1.6, 2.4)), d + 0.6, (c0 + i % 2) % Glass.COLORS.size())
+		1:
+			# a tower of small panes
+			for i in 4:
+				var yy := y + 0.05 + i * 0.85
+				_bonus_pane(g, Glass.rect(x - 0.6, x + 0.6, yy, yy + 0.8), d, c0 if i % 2 == 0 else -1)
+		_:
+			# crystals
+			for i in 3:
+				var r: float = [0.9, 0.65, 0.5][i]
+				var cx: float = x + [0.0, -1.3, 1.3][i]
+				_bonus_pane(g, Glass.ngon(6, r, Vector2(cx, y + r + 0.05), PI / 6.0), d + i * 0.4, c0)
+	if randf() < 0.4:
+		var tg := target("jar", Vector3(x + randf_range(-1.4, 1.4), y + 0.35, -(d - 1.3)), 0.55)
+		tg.on_hit = func(): _jar_got(tg)
+
+
+## a rack of small coloured panes at the side of a great hall
+func _side_bonus(d: float, sd: float) -> void:
+	var g := new_gate("bonus", d)
+	var x := sd * randf_range(6.0, 10.5)
+	var c0 := randi() % Glass.COLORS.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	Worlds.box(st, Vector3(-1.45, 1.6, 0), Vector3(0.12, 3.2, 0.12), Color("2b3138"))
+	Worlds.box(st, Vector3(1.45, 1.6, 0), Vector3(0.12, 3.2, 0.12), Color("2b3138"))
+	Worlds.box(st, Vector3(0, 0.05, 0), Vector3(3.2, 0.1, 0.6), Color("2b3138"))
+	st.set_material(Worlds.lit_mat)
+	var m := MeshInstance3D.new()
+	m.mesh = st.commit()
+	m.position = Vector3(x, 0, -d)
+	decor(g, m)
+	for cx in 3:
+		for cy in 3:
+			var x0 := x - 1.38 + cx * 0.92
+			var y0 := 0.25 + cy * 0.98
+			_bonus_pane(g, Glass.rect(x0 + 0.03, x0 + 0.89, y0, y0 + 0.92), d, c0 if (cx + cy) % 2 == 0 else (c0 + 1) % Glass.COLORS.size(), 10)
+	if randf() < 0.35:
+		var tg := target("jar", Vector3(x, 3.6, -d), 0.55)
+		tg.on_hit = func(): _jar_got(tg)
 
 
 func _spawn_in(a: float, b: float) -> void:
@@ -562,18 +719,28 @@ func _spawn_in(a: float, b: float) -> void:
 		if mode == "endless" and d > door - 16.0 and d < door + 14.0:
 			next_obs = door + 18.0
 			continue
-		var pool: Array = Obstacles.CALM if mode == "calm" else Obstacles.pool_for(rr)
+		# not across the place where the way changes shape
+		if section_at(d - 3.0) != section_at(d + 3.0):
+			next_obs += 6.0
+			continue
+		var sec := section_at(d)
+		var pool: Array = (Obstacles.CALM if mode == "calm" else Obstacles.pool_for(rr)).duplicate()
+		if sec == "sky":
+			pool = pool.filter(func(k): return k in Obstacles.SKY_OK)
+			pool.append_array(["drop", "drop"])
+		elif sec == "hall":
+			pool.append("drop")
 		var kind: String = pool.pick_random()
 		if kind == last_kind:
 			kind = pool.pick_random()
 		last_kind = kind
 		Obstacles.build(self, kind, d, rr if mode == "endless" else 1)
-		var gap := lerpf(22.0, 15.0, clampf(rr / 6.0, 0.0, 1.0)) + randf() * 5.0
+		var gap := lerpf(30.0, 20.0, clampf(rr / 8.0, 0.0, 1.0)) + randf() * 6.0
 		if mode == "calm":
-			gap = 24.0 + randf() * 6.0
+			gap = 30.0 + randf() * 8.0
 		if kind in ["layers", "prism", "snake", "frosted"]:
 			gap += 12.0 if kind == "prism" else 6.0
-		if randf() < 0.6:
+		if sec != "sky" and randf() < 0.45:
 			_jars(d + gap * 0.5)
 		next_obs += gap
 
@@ -849,11 +1016,11 @@ func _process(delta: float) -> void:
 		_look_step(dt)
 		return
 	t += dt
-	var want := 10.0 + minf(_room_of(dist), 8) * 0.6
+	var want := 7.0 + minf(_room_of(dist), 10) * 0.45
 	if mode == "level1":
-		want = 9.0 + clampf(dist / Levels.L1_LEN, 0.0, 1.0) * 2.0
+		want = 6.5 + clampf(dist / Levels.L1_LEN, 0.0, 1.0) * 2.5
 	elif mode == "calm":
-		want = 7.5
+		want = 5.5
 	speed = lerpf(speed, want, 1.0 - exp(-dt * 1.6))
 	var prev := dist
 	dist += speed * dt
@@ -870,6 +1037,13 @@ func _process(delta: float) -> void:
 	var w := _world_at(dist)
 	if w != world:
 		_set_world(w)
+	var sn := section_at(dist + 2.0)
+	if sn != sec_now:
+		sec_now = sn
+		if sn == "sky":
+			hud.show_toast("SKY · BONUS GLASS BELOW", Hud.ACCENT, 0.5)
+		elif sn == "hall":
+			hud.show_toast("GREAT HALL · BONUS AT THE SIDES", Hud.ACCENT, 0.5)
 	_hud_all()
 	if mode != "calm" and balls <= 0 and flying.is_empty():
 		if over_t < 0.0:
@@ -907,8 +1081,19 @@ func _place_camera(dt: float) -> void:
 	var off := Vector3.ZERO
 	if shake > 0.0:
 		off = Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * shake * 0.35
+	# look down a little in the open sky, to see the glass below
+	var want_pitch := -10.0 if section_at(dist + 8.0) == "sky" else -2.5
+	if dt <= 0.0:
+		cam_pitch = want_pitch
+	else:
+		cam_pitch = lerpf(cam_pitch, want_pitch, 1.0 - exp(-dt * 1.4))
 	cam.position = Vector3(sway, EYE + bob, -dist) + off
-	cam.rotation = Vector3(deg_to_rad(-2.5), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1)
+	backdrop.position = Vector3(0, EYE, -dist - 215.0)
+	look_to["sky"] = 1.0 if section_at(dist + 12.0) == "sky" else 0.0
+	if dt <= 0.0 and not look_now.is_empty():
+		look_now["sky"] = look_to["sky"]
+		_apply_look()
+	cam.rotation = Vector3(deg_to_rad(cam_pitch), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1)
 	cam.fov = 70.0 + clampf((speed - 9.0) * 0.9, 0.0, 8.0) + fov_kick
 
 
@@ -1042,7 +1227,62 @@ func _throw_at(screen: Vector2) -> void:
 	_throw(cam.project_ray_normal(screen))
 
 
+## a little help with aim: a throw that only just misses glass (or a jar, a prism, a button) is bent onto it
+func _assist(dir: Vector3) -> Vector3:
+	var o := cam.position
+	var from := o + dir * 1.3 + Vector3(0, -0.3, 0)
+	var on_glass := INF
+	var cands := []
+	for p in panes:
+		if not p.alive or p.opened or p.falling:
+			continue
+		var xf: Transform3D = p.node.global_transform
+		var ahead := -xf.origin.z - dist
+		if ahead < 2.5 or ahead > 48.0:
+			continue
+		var inv := xf.affine_inverse()
+		var la: Vector3 = inv * o
+		var lb: Vector3 = inv * (o + dir * 90.0)
+		if la.z * lb.z > 0.0 or is_equal_approx(la.z, lb.z):
+			continue
+		var lh := la.lerp(lb, la.z / (la.z - lb.z))
+		var lp := Vector2(lh.x, lh.y)
+		if Glass.inside(p.poly, lp):
+			on_glass = minf(on_glass, ahead)
+			continue
+		# the nearest point well inside the pane, towards its middle
+		var c := Glass.centroid(p.poly)
+		var q := lp
+		for i in 8:
+			q = q.lerp(c, 0.3)
+			if Glass.inside(p.poly, q, 0.12):
+				break
+		var wpt: Vector3 = xf * Vector3(q.x, q.y, 0)
+		cands.append([dir.angle_to((wpt - o).normalized()) / 0.75, wpt, ahead])
+	for tg in targets:
+		if not tg.alive:
+			continue
+		var tp: Vector3 = tg.node.global_position
+		var ahead := -tp.z - dist
+		if ahead < 2.5 or ahead > 48.0:
+			continue
+		cands.append([dir.angle_to((tp - o).normalized()), tp, ahead])
+	var best_a := deg_to_rad(4.5)
+	var best_pt = null
+	for cd in cands:
+		if cd[0] < best_a and cd[2] < on_glass:
+			best_a = cd[0]
+			best_pt = cd[1]
+	if best_pt == null:
+		return dir
+	var aim: Vector3 = best_pt
+	var flight := from.distance_to(aim) / (BALL_SPEED + speed)
+	aim.y += 0.5 * GRAV * flight * flight
+	return (aim - from).normalized()
+
+
 func _throw(dir: Vector3) -> void:
+	dir = _assist(dir)
 	if mode != "calm":
 		balls -= 1
 	shots += 1
@@ -1119,12 +1359,14 @@ func _update_balls(dt: float) -> void:
 				if tg.on_hit.is_valid():
 					tg.on_hit.call()
 				_target_burst(tg)
-		if nb.y < 0.13:
+		var bsec := section_at(-nb.z)
+		if nb.y < 0.13 and bsec != "sky":
 			nb.y = 0.13
 			v.y = absf(v.y) * 0.45
 			v.x *= 0.8
-		if absf(nb.x) > HALF_W - 0.13:
-			nb.x = signf(nb.x) * (HALF_W - 0.13)
+		var lim := INF if bsec == "sky" else (Worlds.HALL_W - 0.3 if bsec == "hall" else HALF_W - 0.13)
+		if absf(nb.x) > lim:
+			nb.x = signf(nb.x) * lim
 			v.x = -v.x * 0.5
 		node.position = nb
 		b.v = v
@@ -1251,6 +1493,20 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		broken += 1
 		score += 10 * _mult()
 		_combo(p.color_id, p.node.global_transform * Vector3(lp.x, lp.y, 0))
+		if p.bonus > 0:
+			score += p.bonus * _mult()
+			var bw: Vector3 = p.node.global_transform * Vector3(lp.x, lp.y, 0)
+			if not cam.is_position_behind(bw):
+				hud.popup("+%d" % (p.bonus * _mult()), cam.unproject_position(bw), Color("ffd36b"))
+			# all the bonus glass of one island or rack: marbles back
+			var left := 0
+			for q in p.gate.panes:
+				if q.alive and q.bonus > 0:
+					left += 1
+			if left == 0:
+				balls += 3
+				hud.show_toast("ALL BROKEN  +3", Color("ffd36b"), 0.5)
+				sfx.play("multi", -3.0)
 	var xf: Transform3D = p.node.global_transform
 	var hit_w: Vector3 = xf * Vector3(lp.x, lp.y, 0)
 	var area := absf(Glass.area(p.poly))
@@ -1649,7 +1905,7 @@ func _update_shards(dt: float) -> void:
 		else:
 			v.y -= 14.0 * dt
 		var pos := n.position + v * dt
-		if pos.y < 0.06:
+		if pos.y < 0.06 and section_at(-pos.z) != "sky":
 			pos.y = 0.06
 			v.y = absf(v.y) * 0.3
 			v.x *= 0.6
@@ -1659,7 +1915,7 @@ func _update_shards(dt: float) -> void:
 		n.rotate(s.axis, s.w * dt)
 		s.v = v
 		s.life += dt
-		if s.life > 5.0 or -pos.z < dist - 4.0:
+		if s.life > 5.0 or -pos.z < dist - 4.0 or pos.y < -40.0:
 			_free_shard(n)
 			shards.remove_at(i)
 		i -= 1
@@ -1694,6 +1950,22 @@ func _auto_play() -> void:
 		if ahead < best_d:
 			best_d = ahead
 			target_pos = aim
+			key = id
+	# bonus glass (below in the sky, at the sides of a hall), when nothing is in the way
+	for p in panes:
+		if not p.alive or p.bonus <= 0 or balls < 12:
+			continue
+		var xf: Transform3D = p.node.global_transform
+		var ahead := -xf.origin.z - dist
+		if ahead < 8.0 or ahead > 26.0:
+			continue
+		var id: int = p.get_instance_id()
+		if _fired.has(id) and t - _fired[id] < 0.6:
+			continue
+		if ahead + 6.0 < best_d:
+			best_d = ahead + 6.0
+			var cc := Glass.centroid(p.poly)
+			target_pos = xf * Vector3(cc.x, cc.y, 0)
 			key = id
 	for tg in targets:
 		if not tg.alive:

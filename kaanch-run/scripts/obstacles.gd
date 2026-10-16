@@ -16,6 +16,8 @@ const POOL := [
 	["snake", "shield", "grille", "collapse", "halves"],
 	["flyin", "shutters", "revolving", "charge"],
 ]
+# the ones that look right floating in the open sky (nothing standing on a floor or hanging from a roof)
+const SKY_OK := ["pane", "split", "grid", "layers", "stack", "color_row", "tempered", "frosted", "slide", "rise", "hinge", "weak", "laminated", "shy", "spinner", "rotor", "prism", "mirror", "orbit", "blast", "snake", "shield", "halves", "flyin", "charge", "shutters"]
 # gentler ones for the calm mode
 const CALM := ["pane", "split", "grid", "layers", "stack", "color_row", "tempered", "slide", "rise", "spinner", "orbit", "prism", "blast", "collapse", "halves", "rotor"]
 

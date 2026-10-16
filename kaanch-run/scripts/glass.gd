@@ -300,7 +300,7 @@ static func slab_mesh(poly: PackedVector2Array, kind: String, rim_scale := 1.0, 
 	st.set_material(mirror_mat if mirror else glass_mat)
 	var mesh := st.commit()
 	# the edges: a thin bright band just inside the outline, on both faces
-	var w: float = K.rim * rim_scale
+	var w: float = K.rim * rim_scale * 1.4
 	var cc := centroid(poly)
 	var inner := PackedVector2Array()
 	for p in poly:

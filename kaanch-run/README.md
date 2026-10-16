@@ -6,13 +6,17 @@ You fly forward through halls of glass. Tap to throw marbles and break the glass
 
 ## Modes
 
-- **Level 1 · First Light** — a 75-second run through a stained-glass cathedral, ending in a rose-window finale. Finishing it gives up to three stars (for accuracy and no crashes) and unlocks Endless.
+- **Level 1 · First Light** — a 90-second run through a stained-glass cathedral: the crypt tunnel, the great hall, out through the roof into the sky, and back in for a rose-window finale. Finishing it gives up to three stars (for accuracy and no crashes) and unlocks Endless.
 - **Endless** — rooms of 200 m that change world as you go: Cathedral, Venice (Murano), Lanterns, Mosaic and Sheesh Mahal, each with its own music. Doors between rooms are checkpoints.
 - **Calm** — slower, with no penalties and unlimited marbles.
 
+## The way
+
+Each world changes shape as you go: narrow round **tunnels**, wide **great halls** with bonus glass on racks at the sides, and the open **sky**, where the glass floats and falls from above, and little islands below carry bonus glass to break from the air. Bonus glass is never in your way; break all of an island or a rack for three marbles.
+
 ## Glass
 
-Thin, mid, thick (2 hits), slab (3 hits), mirror (bounces the marble back), tempered (breaks into crumbs), laminated (sags, then falls), frosted (hides what is behind), blast glass (breaks everything near it). The glass moves too: it slides, rises, swings open on a hinge, spins, swings as a pendulum, flies in, shuts in time with the music, dodges the marble, splits in two and falls when its supports break. Some panes only break at a marked weak spot.
+Thin, mid, thick (2 hits), slab (3 hits), mirror (bounces the marble back), tempered (breaks into crumbs), laminated (sags, then falls), frosted (hides what is behind), blast glass (breaks everything near it). The glass moves too: it drops from the sky, slides, rises, swings open on a hinge, spins, swings as a pendulum, flies in, shuts in time with the music, dodges the marble, splits in two and falls when its supports break. Some panes only break at a marked weak spot.
 
 **Prism chain:** hitting a prism fires beams that break every pane of its colour. Breaking panes of the same colour in a row builds a colour combo; every five in a row give two marbles.
 

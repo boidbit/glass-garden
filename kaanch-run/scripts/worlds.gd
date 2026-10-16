@@ -10,18 +10,41 @@ const SEG := 16.0
 
 const LIST := ["cathedral", "venice", "lanterns", "mosaic", "sheesh"]
 const DEFS := {
-	"cathedral": {"name": "Cathedral", "bg": Color("241b2e"), "amb": Color("8a7690"), "sun": Color("ffd9a8"), "sun_e": 1.15, "rim": Color("fff3d6"), "fog": 0.02, "accent": Color("ffcf6b")},
-	"venice": {"name": "Venice", "bg": Color("a9d4ec"), "amb": Color("b8cbd8"), "sun": Color("fff0d6"), "sun_e": 1.3, "rim": Color("173a5c"), "fog": 0.011, "accent": Color("ff8a5c")},
-	"lanterns": {"name": "Lantern Night", "bg": Color("0b1022"), "amb": Color("3c4670"), "sun": Color("9fb2ff"), "sun_e": 0.6, "rim": Color("ffe9c4"), "fog": 0.022, "accent": Color("ff9f45")},
-	"mosaic": {"name": "Mosaic Court", "bg": Color("f0c79c"), "amb": Color("e0b896"), "sun": Color("fff1d8"), "sun_e": 1.25, "rim": Color("3a2414"), "fog": 0.012, "accent": Color("1fb5b5")},
-	"sheesh": {"name": "Mirror Palace", "bg": Color("16070b"), "amb": Color("7a3a40"), "sun": Color("ffdca0"), "sun_e": 1.0, "rim": Color("fff0c8"), "fog": 0.02, "accent": Color("ffcc66")},
+	"cathedral": {"name": "Cathedral", "bg": Color("120d18"), "amb": Color("4a3e52"), "sun": Color("ffd9a8"), "sun_e": 0.8, "rim": Color("fff3d6"), "fog": 0.024, "accent": Color("ffcf6b"), "dim": 0.6, "gdim": 0.55},
+	"venice": {"name": "Venice", "bg": Color("1d3550"), "amb": Color("5a6e88"), "sun": Color("ffc9a0"), "sun_e": 0.75, "rim": Color("e8f8ff"), "fog": 0.016, "accent": Color("ff8a5c"), "dim": 0.62, "gdim": 0.8},
+	"lanterns": {"name": "Lantern Night", "bg": Color("05070f"), "amb": Color("2a3050"), "sun": Color("9fb2ff"), "sun_e": 0.45, "rim": Color("ffe9c4"), "fog": 0.026, "accent": Color("ff9f45"), "dim": 0.7, "gdim": 0.75},
+	"mosaic": {"name": "Mosaic Court", "bg": Color("3a2030"), "amb": Color("7a5a5a"), "sun": Color("ffb37a"), "sun_e": 0.8, "rim": Color("fff1d8"), "fog": 0.016, "accent": Color("1fb5b5"), "dim": 0.6, "gdim": 0.9},
+	"sheesh": {"name": "Mirror Palace", "bg": Color("0c0306"), "amb": Color("4a2228"), "sun": Color("ffdca0"), "sun_e": 0.7, "rim": Color("fff0c8"), "fog": 0.024, "accent": Color("ffcc66"), "dim": 0.6, "gdim": 0.6},
 }
+# the colours of each world's tunnels, halls and skies
+const TUNE := {
+	"cathedral": {"wall": Color("3e352f"), "wall2": Color("cbbda4"), "floor_a": Color("bdb09a"), "floor_b": Color("8a7d6c"), "ground": Color("1a1420"), "lights": [Color("ffd27a"), Color("ffb05a")], "bits": [], "sky_top": Color("141a3c"), "sky_hor": Color("6a4460")},
+	"venice": {"wall": Color("c9583f"), "wall2": Color("e9dcc4"), "floor_a": Color("e9dcc4"), "floor_b": Color("b9a88c"), "ground": Color("123a48"), "lights": [Color("ffe2a6"), Color("7fd8ff")], "bits": [], "sky_top": Color("10284a"), "sky_hor": Color("4a6a90")},
+	"lanterns": {"wall": Color("c8302c"), "wall2": Color("1c1414"), "floor_a": Color("5a3f2c"), "floor_b": Color("4a3324"), "ground": Color("04060c"), "lights": [Color("ff9f45"), Color("ff6a4d"), Color("ffd27a")], "bits": [], "sky_top": Color("03050f"), "sky_hor": Color("1c1c44")},
+	"mosaic": {"wall": Color("1d6fa3"), "wall2": Color("f0e2c8"), "floor_a": Color("c9744c"), "floor_b": Color("e2c9a6"), "ground": Color("3a2418"), "lights": [Color("ffcf7a"), Color("1fb5b5")], "bits": [Color("1fa58a"), Color("f2eadc")], "sky_top": Color("22163c"), "sky_hor": Color("7a4058")},
+	"sheesh": {"wall": Color("3a0c14"), "wall2": Color("e8b64a"), "floor_a": Color("ece6dc"), "floor_b": Color("d9d2c6"), "ground": Color("12040a"), "lights": [Color("ffd896"), Color("fff0c8")], "bits": [Color("f4d27a"), Color("e8eef6")], "sky_top": Color("0e0512"), "sky_hor": Color("4a1a2a")},
+}
+# the two shapes of way in each 200 m room of a world (tunnel, hall or sky), two sets taken in turn
+const SECT := {
+	"cathedral": [["tunnel", "sky"], ["hall", "sky"]],
+	"venice": [["hall", "sky"], ["tunnel", "sky"]],
+	"lanterns": [["tunnel", "sky"], ["tunnel", "hall"]],
+	"mosaic": [["hall", "tunnel"], ["hall", "sky"]],
+	"sheesh": [["tunnel", "hall"], ["hall", "sky"]],
+}
+const HALL_W := 15.0
+const T_C := Vector2(0, 3.0)   # the middle of a tunnel
+const T_R := 5.9               # and its radius
+const SKY_GROUND := -26.0
+
 const JEWELS := [Color("e8283c"), Color("ffb020"), Color("2fbf6a"), Color("2f6fe0"), Color("9a45d8"), Color("f06aa8"), Color("20c4c4")]
 
 static var lit_mat: StandardMaterial3D
 static var glow_mat: StandardMaterial3D
 static var shaft_mat: StandardMaterial3D
 static var tex_mats := {}
+static var _dim := 1.0
+static var _gdim := 1.0
 
 
 static func mats() -> void:
@@ -113,6 +136,7 @@ static func tex_mat(w: String) -> StandardMaterial3D:
 	if w == "shoji":
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	m.albedo_color = Color(_gdim, _gdim, _gdim) if w == "shoji" else Color(_dim, _dim, _dim)
 	tex_mats[w] = m
 	return m
 
@@ -212,12 +236,28 @@ class Parts:
 		shaft.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 
-static func build(w: String, d0: float, seed_v: int) -> Node3D:
+static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor") -> Node3D:
 	mats()
 	var P := Parts.new()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
 	var z0 := -d0
+	if sec != "corridor":
+		match sec:
+			"tunnel":
+				_tunnel(P, rng, z0, w)
+			"hall":
+				_hall(P, rng, z0, w)
+			"sky":
+				_sky(P, rng, z0, w)
+	if sec != prev:
+		_facade(P, z0, w, sec, prev)
+	if sec == "corridor":
+		_corridor(P, rng, z0, w)
+	return _finish(P, w)
+
+
+static func _corridor(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
 	match w:
 		"cathedral":
 			_cathedral(P, rng, z0)
@@ -229,6 +269,9 @@ static func build(w: String, d0: float, seed_v: int) -> Node3D:
 			_mosaic(P, rng, z0)
 		"sheesh":
 			_sheesh(P, rng, z0)
+
+
+static func _finish(P: Parts, w: String) -> Node3D:
 	var mesh := ArrayMesh.new()
 	if P.n_lit:
 		P.lit.set_material(lit_mat)
@@ -467,3 +510,138 @@ static func _sheesh(P: Parts, rng: RandomNumberGenerator, z0: float) -> void:
 		box(P.glow, Vector3(0, CEIL - 0.02, z0 - k * 4.0 - 2.0), Vector3(HALF_W * 2, 0.05, 0.08), Color("e8b64a"))
 		P.n_glow += 1
 	P.n_lit += 1
+
+
+# ---------- the other shapes of the way ----------
+## how bright the world's own shapes are (the glass stays bright), set as you go from one world to the next
+static func set_dim(dim: float, gdim: float) -> void:
+	mats()
+	_dim = dim
+	_gdim = gdim
+	lit_mat.albedo_color = Color(dim, dim, dim)
+	glow_mat.albedo_color = Color(gdim, gdim, gdim)
+	shaft_mat.albedo_color = Color(gdim, gdim, gdim)
+	for k in tex_mats:
+		var m: StandardMaterial3D = tex_mats[k]
+		m.albedo_color = Color(dim, dim, dim) if k != "shoji" else Color(gdim, gdim, gdim)
+
+
+## where one shape of the way meets another: a wall across it, with an opening the size of the corridor
+static func _facade(P: Parts, z: float, w: String, a: String, b: String) -> void:
+	var T: Dictionary = TUNE[w]
+	var acc: Color = DEFS[w].accent
+	var ow := HALF_W + 0.3
+	var oh := CEIL + 0.3
+	var wall: Color = T.wall * 0.8
+	var big := 18.0 if (a == "hall" or b == "hall") else 9.0
+	var low := -1.0
+	var top := 8.0
+	if a == "sky" or b == "sky":
+		# the end of a building floating in the sky: just a thick edge round the opening
+		big = 2.2
+		low = -2.4
+		top = 1.8
+	box(P.lit, Vector3(-ow - big * 0.5, (oh + top + low) * 0.5, z), Vector3(big, oh + top - low, 0.8), wall)
+	box(P.lit, Vector3(ow + big * 0.5, (oh + top + low) * 0.5, z), Vector3(big, oh + top - low, 0.8), wall)
+	box(P.lit, Vector3(0, oh + top * 0.5, z), Vector3(ow * 2.0 + 0.2, top, 0.8), wall)
+	if low < -1.0:
+		box(P.lit, Vector3(0, (low - 0.4) * 0.5, z), Vector3(ow * 2.0 + 0.2, -low - 0.4, 0.8), wall * 0.8)
+		P.n_lit += 1
+	P.n_lit += 3
+	# a bright frame round the opening, so you see the change coming
+	box(P.glow, Vector3(0, oh, z + 0.45), Vector3(ow * 2.0 + 0.3, 0.16, 0.1), acc)
+	box(P.glow, Vector3(-ow, oh * 0.5 - 0.1, z + 0.45), Vector3(0.16, oh + 0.2, 0.1), acc)
+	box(P.glow, Vector3(ow, oh * 0.5 - 0.1, z + 0.45), Vector3(0.16, oh + 0.2, 0.1), acc)
+	P.n_glow += 3
+
+
+## a round tunnel: rings of the world's colour, thin bright rings between them
+static func _tunnel(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
+	var T: Dictionary = TUNE[w]
+	var acc: Color = DEFS[w].accent
+	var a0 := -asin(T_C.y / T_R) - 0.02
+	var a1 := PI - a0
+	var c3 := Vector3(T_C.x, T_C.y, 0)
+	# the floor
+	for zi in 8:
+		var col: Color = T.floor_a if zi % 2 == 0 else T.floor_b
+		box(P.lit, Vector3(0, -0.15, z0 - zi * 2.0 - 1.0), Vector3(T_R * 2.0, 0.3, 1.96), col * rng.randf_range(0.95, 1.05))
+		P.n_lit += 1
+	# glowing strips along the foot of the walls
+	for sd in [-1.0, 1.0]:
+		box(P.glow, Vector3(sd * (T_R - 0.9), 0.04, z0 - SEG * 0.5), Vector3(0.1, 0.05, SEG), acc)
+		P.n_glow += 1
+	for k in 8:
+		var zc := z0 - k * 2.0 - 1.0
+		var main: Color = T.wall if k % 2 == 0 else T.wall * 0.8
+		if w == "lanterns":
+			# a tunnel of red gates, close together
+			main = T.wall if k % 2 == 0 else Color("1c1414")
+		arc_boxes(P.lit, c3 + Vector3(0, 0, zc), T_R, a0, a1, 16, 0.4, 1.94, main)
+		P.n_lit += 16
+		if k % 2 == 0:
+			arc_boxes(P.glow, c3 + Vector3(0, 0, zc - 1.0), T_R - 0.22, a0 + 0.05, a1 - 0.05, 22, 0.07, 0.1, acc)
+			P.n_glow += 22
+	# little bright bits set in the walls (mirror work, tiles)
+	var bits: Array = T.bits
+	if bits.size():
+		for i in 26:
+			var a := rng.randf_range(a0 + 0.1, a1 - 0.1)
+			var p := c3 + Vector3(cos(a) * (T_R - 0.22), sin(a) * (T_R - 0.22), z0 - rng.randf_range(0.2, SEG - 0.2))
+			box(P.glow, p, Vector3(0.14, 0.14, 0.14), bits[i % bits.size()])
+			P.n_glow += 1
+
+
+## a great hall: a wide floor, two rows of tall columns, tall windows far off at the sides
+static func _hall(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
+	var T: Dictionary = TUNE[w]
+	var acc: Color = DEFS[w].accent
+	for xi in 8:
+		for zi in 4:
+			var x := -HALL_W + 1.875 + xi * 3.75
+			var col: Color = T.floor_a if (xi + zi) % 2 == 0 else T.floor_b
+			box(P.lit, Vector3(x, -0.15, z0 - zi * 4.0 - 2.0), Vector3(3.72, 0.3, 3.96), col * rng.randf_range(0.95, 1.05))
+			P.n_lit += 1
+	for sd in [-1.0, 1.0]:
+		box(P.lit, Vector3(sd * (HALL_W + 0.5), 7.0, z0 - SEG * 0.5), Vector3(0.6, 16.0, SEG), T.wall * 0.7)
+		P.n_lit += 1
+		for k in 2:
+			var zc := z0 - k * 8.0 - 4.0
+			# a tall column with a bright band at its head
+			box(P.lit, Vector3(sd * 8.0, 6.0, zc), Vector3(0.9, 12.0, 0.9), T.wall2 * rng.randf_range(0.9, 1.0))
+			box(P.lit, Vector3(sd * 8.0, 0.3, zc), Vector3(1.3, 0.6, 1.3), T.wall2 * 0.8)
+			box(P.glow, Vector3(sd * 8.0, 11.6, zc), Vector3(1.0, 0.12, 1.0), acc)
+			P.n_lit += 2
+			P.n_glow += 1
+			# a tall window far off in the side wall
+			var lc: Color = T.lights[rng.randi_range(0, T.lights.size() - 1)]
+			box(P.glow, Vector3(sd * (HALL_W + 0.15), 6.5, zc - 4.0), Vector3(0.08, 7.0, 1.6), lc * 0.8)
+			P.n_glow += 1
+	box(P.lit, Vector3(0, 14.5, z0 - SEG * 0.5), Vector3(HALL_W * 2.0 + 2.0, 0.6, SEG), T.wall * 0.4)
+	P.n_lit += 1
+
+
+## open sky: the ground far below with its lights, and tall pillars rising from it to rush past
+static func _sky(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
+	var T: Dictionary = TUNE[w]
+	var acc: Color = DEFS[w].accent
+	box(P.lit, Vector3(0, SKY_GROUND, z0 - SEG * 0.5), Vector3(160.0, 0.4, SEG), T.ground)
+	P.n_lit += 1
+	for i in 26:
+		var lc: Color = T.lights[i % T.lights.size()]
+		var x := rng.randf_range(-70.0, 70.0)
+		if absf(x) < 3.0:
+			x += 6.0 * signf(x + 0.01)
+		box(P.glow, Vector3(x, SKY_GROUND + 0.3, z0 - rng.randf_range(0.0, SEG)), Vector3(0.5, 0.3, 0.5), lc)
+		P.n_glow += 1
+	for k in 2:
+		if rng.randf() < 0.6:
+			var sd := -1.0 if rng.randf() < 0.5 else 1.0
+			var x := sd * rng.randf_range(16.0, 40.0)
+			var top := rng.randf_range(-10.0, 6.0)
+			var zc := z0 - rng.randf_range(1.0, SEG - 1.0)
+			var wdt := rng.randf_range(1.2, 2.4)
+			box(P.lit, Vector3(x, (SKY_GROUND + top) * 0.5, zc), Vector3(wdt, top - SKY_GROUND, wdt), T.wall * rng.randf_range(0.8, 1.0))
+			box(P.glow, Vector3(x, top + 0.1, zc), Vector3(wdt + 0.2, 0.2, wdt + 0.2), acc)
+			P.n_lit += 1
+			P.n_glow += 1
