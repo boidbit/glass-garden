@@ -29,6 +29,10 @@ var score_label: Label
 var combo_label: Label
 var prog_fill: ColorRect
 var toast: Label
+var icon: TextureRect
+var crack_rect: TextureRect
+var _crack_tw: Tween
+var _pulse := 0.0
 var title_big: Label
 var title_small: Label
 var _title_tw: Tween
@@ -267,7 +271,7 @@ func _build_hud() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_child(row)
-	var icon := TextureRect.new()
+	icon = TextureRect.new()
 	icon.texture = _ball_icon(64)
 	icon.custom_minimum_size = Vector2(38, 38)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -281,6 +285,7 @@ func _build_hud() -> void:
 	multi_label.visible = false
 	row.add_child(multi_label)
 	dist_label = _label("0 m", f600, 22, Color(1, 1, 1, 0.8), 6)
+	dist_label.visible = false
 	dist_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	top.add_child(dist_label)
 	# the score and the colour combo, top right
@@ -293,6 +298,7 @@ func _build_hud() -> void:
 	right.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(right)
 	score_label = _label("0", title_font, 44, INK, 8)
+	score_label.visible = false
 	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	right.add_child(score_label)
 	combo_label = _label("", f800, 28, ACCENT, 8)
@@ -332,9 +338,20 @@ func _build_hud() -> void:
 
 func set_balls(n: int, multi: int, infinite := false) -> void:
 	ball_label.text = "∞" if infinite else str(n)
-	ball_label.add_theme_color_override("font_color", Color("ff6b6b") if (n <= 5 and not infinite) else INK)
-	multi_label.visible = multi > 1
-	multi_label.text = "×%d" % multi
+	# running low: the number turns red and beats, faster the fewer are left
+	var low := n < 10 and not infinite
+	if low:
+		_pulse += get_process_delta_time() * (4.0 + (10 - n) * 0.8)
+		var k := 0.5 + 0.5 * sin(_pulse)
+		ball_label.add_theme_color_override("font_color", Color("ff4a4a").lerp(Color("ffb0a0"), k * 0.5))
+		ball_label.pivot_offset = ball_label.size * 0.5
+		ball_label.scale = Vector2.ONE * (1.0 + 0.12 * k)
+	else:
+		ball_label.add_theme_color_override("font_color", INK)
+		ball_label.scale = Vector2.ONE
+	# more than one ball a throw: the ball turns gold
+	multi_label.visible = false
+	icon.modulate = Color(1.0, 0.85, 0.45) if multi > 1 else Color.WHITE
 
 
 func set_dist(d: float, progress: float) -> void:
@@ -354,7 +371,59 @@ func set_combo(color_id: int, n: int, mult: int) -> void:
 	combo_label.add_theme_color_override("font_color", Glass.COLORS[color_id].lightened(0.25))
 
 
+## a crack across the screen when you run into glass
+func crack_screen() -> void:
+	if crack_rect == null:
+		crack_rect = TextureRect.new()
+		crack_rect.texture = _crack_image()
+		crack_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		crack_rect.stretch_mode = TextureRect.STRETCH_SCALE
+		crack_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		crack_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hud.add_child(crack_rect)
+	crack_rect.flip_h = randf() < 0.5
+	crack_rect.flip_v = randf() < 0.5
+	crack_rect.modulate.a = 1.0
+	if _crack_tw:
+		_crack_tw.kill()
+	_crack_tw = create_tween()
+	_crack_tw.tween_interval(0.35)
+	_crack_tw.tween_property(crack_rect, "modulate:a", 0.0, 0.7)
+
+
+func _crack_image() -> ImageTexture:
+	var W := 480
+	var H := 270
+	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var c := Vector2(W * 0.62, H * 0.42)
+	for k in 16:
+		var a := TAU * k / 16.0 + randf_range(-0.15, 0.15)
+		var p := c
+		var dir := Vector2(cos(a), sin(a))
+		for i in 400:
+			if i % 14 == 0:
+				dir = dir.rotated(randf_range(-0.4, 0.4))
+			p += dir
+			if p.x < 0 or p.y < 0 or p.x >= W or p.y >= H:
+				break
+			var al := 0.95 - float(i) / 500.0
+			img.set_pixelv(Vector2i(p), Color(1, 1, 1, al))
+			if p.x + 1 < W:
+				img.set_pixelv(Vector2i(p) + Vector2i(1, 0), Color(0.7, 0.85, 0.9, al * 0.6))
+	for r: float in [18.0, 34.0, 55.0]:
+		for i in 240:
+			var a := TAU * i / 240.0
+			var q: Vector2 = c + Vector2(cos(a), sin(a)) * (r + sin(a * 7.0) * 3.0)
+			if q.x >= 0 and q.y >= 0 and q.x < W and q.y < H:
+				img.set_pixelv(Vector2i(q), Color(1, 1, 1, 0.7))
+	return ImageTexture.create_from_image(img)
+
+
 func show_toast(text: String, col := INK, hold := 0.7) -> void:
+	# nothing written on the screen while you play
+	if hud.visible:
+		return
 	toast.text = text
 	toast.add_theme_color_override("font_color", col)
 	toast.pivot_offset = toast.size * 0.5
@@ -369,6 +438,7 @@ func show_toast(text: String, col := INK, hold := 0.7) -> void:
 
 
 func show_title(big: String, small: String, col: Color) -> void:
+	return
 	title_big.text = big.to_upper()
 	title_small.text = small
 	title_big.add_theme_color_override("font_color", col)
@@ -398,6 +468,7 @@ func flash_screen(col: Color, a := 0.45, dur := 0.4) -> void:
 
 
 func popup(text: String, at: Vector2, col := ACCENT) -> void:
+	return
 	var l := _label(text, f800, 42, col, 8)
 	hud.add_child(l)
 	l.position = at - Vector2(30, 30)

@@ -11,8 +11,8 @@ const START_BALLS := 25
 const SEG := Worlds.SEG
 const HALF_W := Worlds.HALF_W
 const CEIL := Worlds.CEIL
-const BALL_SPEED := 60.0
-const GRAV := 2.5
+const BALL_SPEED := 50.0
+const GRAV := 9.0
 
 enum S { MENU, PLAY, PAUSE, OVER, DONE }
 
@@ -80,6 +80,7 @@ var look_to := {}
 var marble_mats: Array = []
 var marble_mesh: SphereMesh
 var jar_mesh: Mesh
+var crystal_mesh: ArrayMesh
 var jar_mat: StandardMaterial3D
 var hub_mat: StandardMaterial3D
 var prism_mesh: ArrayMesh
@@ -263,8 +264,8 @@ func _make_scene() -> void:
 	fx.setup(cam, glow_tex, crack_tex)
 	# marbles: little balls of coloured glass
 	marble_mesh = SphereMesh.new()
-	marble_mesh.radius = 0.2
-	marble_mesh.height = 0.4
+	marble_mesh.radius = 0.15
+	marble_mesh.height = 0.3
 	marble_mesh.radial_segments = 20
 	marble_mesh.rings = 10
 	# a ball of polished iron: the bright sky and dark ground of a chrome sphere are painted on, so it shines anywhere
@@ -283,6 +284,7 @@ func _make_scene() -> void:
 	im.rim_tint = 0.1
 	marble_mats.append(im)
 	# a jar of marbles
+	crystal_mesh = _crystal_shape()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.26
 	cyl.bottom_radius = 0.3
@@ -290,13 +292,14 @@ func _make_scene() -> void:
 	cyl.radial_segments = 14
 	jar_mesh = cyl
 	jar_mat = StandardMaterial3D.new()
-	jar_mat.albedo_color = Color(0.8, 0.95, 1.0, 0.35)
+	jar_mat.albedo_color = Color(0.75, 0.95, 1.0, 0.75)
+	jar_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	jar_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	jar_mat.roughness = 0.05
 	jar_mat.metallic = 0.2
 	jar_mat.emission_enabled = true
 	jar_mat.emission = Color("9fe8ff")
-	jar_mat.emission_energy_multiplier = 0.9
+	jar_mat.emission_energy_multiplier = 1.4
 	hub_mat = StandardMaterial3D.new()
 	hub_mat.albedo_color = Color(1.0, 0.86, 0.45, 0.9)
 	hub_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -361,6 +364,30 @@ func _swirl_texture() -> Texture2D:
 			img.set_pixel(x, y, Color(lerpf(0.75, 1.0, k) * glassy, lerpf(0.82, 1.0, k) * glassy, lerpf(0.86, 1.0, k) * glassy, lerpf(0.55, 1.0, k)))
 	img.generate_mipmaps()
 	return ImageTexture.create_from_image(img)
+
+
+## a crystal to shoot: two pyramids, point to point
+func _crystal_shape() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var r := 0.32
+	var h := 0.5
+	var ring := []
+	for i in 6:
+		var a := TAU * i / 6.0
+		ring.append(Vector3(cos(a) * r, 0, sin(a) * r))
+	for i in 6:
+		var p0: Vector3 = ring[i]
+		var p1: Vector3 = ring[(i + 1) % 6]
+		for tip in [Vector3(0, h, 0), Vector3(0, -h * 0.8, 0)]:
+			var nrm := (p1 - p0).cross(tip - p0).normalized()
+			if nrm.dot(p0 + p1 + tip) < 0.0:
+				nrm = -nrm
+			st.set_normal(nrm)
+			st.add_vertex(p0)
+			st.add_vertex(tip)
+			st.add_vertex(p1)
+	return st.commit()
 
 
 ## a prism: a long triangular crystal
@@ -728,12 +755,11 @@ func _extras(d0: float, sec: String) -> void:
 	if mode == "menu" or mode == "gallery" or d0 < 1.0:
 		return
 	if sec == "sky":
-		if randf() < 0.8:
+		if randf() < 0.45:
 			_island(d0 + randf_range(3.0, 13.0))
 	elif sec == "hall":
-		_side_bonus(d0 + randf_range(2.0, 7.0), -1.0 if randf() < 0.5 else 1.0)
-		if randf() < 0.6:
-			_side_bonus(d0 + randf_range(9.0, 14.0), -1.0 if randf() < 0.5 else 1.0)
+		if randf() < 0.45:
+			_side_bonus(d0 + randf_range(2.0, 14.0), -1.0 if randf() < 0.5 else 1.0)
 
 
 func _bonus_pane(g: GGate, poly: PackedVector2Array, d: float, color_id: int, pts := 15) -> GPane:
@@ -810,79 +836,27 @@ func _island(d: float) -> void:
 	sh.rotation.x = -PI * 0.5
 	sh.position = Vector3(x + 1.5, Worlds.SKY_GROUND + 0.25, -d + 1.0)
 	decor(g, sh)
-	var c0 := randi() % Glass.COLORS.size()
-	match randi() % 6:
-		0:
-			# a glass house: three panes side by side
-			for i in 3:
-				var x0 := x - 1.8 + i * 1.2
-				_bonus_pane(g, Glass.rect(x0 + 0.03, x0 + 1.17, y, y + randf_range(1.6, 2.4)), d + 0.6, (c0 + i % 2) % Glass.COLORS.size())
-		1:
-			# a tower of small panes
-			for i in 4:
-				var yy := y + 0.05 + i * 0.85
-				_bonus_pane(g, Glass.rect(x - 0.6, x + 0.6, yy, yy + 0.8), d, c0 if i % 2 == 0 else -1)
-		2:
-			# crystals
-			for i in 3:
-				var r: float = [0.9, 0.65, 0.5][i]
-				var cx: float = x + [0.0, -1.3, 1.3][i]
-				_bonus_pane(g, Glass.ngon(6, r, Vector2(cx, y + r + 0.05), PI / 6.0), d + i * 0.4, c0)
-		3:
-			# a glass arch, and a smaller one behind it
-			_bonus_pane(g, Glass.arch(x - 1.4, x + 1.4, y, y + 1.6, 6), d + 0.8, -1)
-			_bonus_pane(g, Glass.arch(x - 0.9, x + 0.9, y, y + 1.2, 6), d - 0.6, c0)
-		4:
-			# a little windmill of glass, turning
-			var hub := Vector2(x, y + 1.9)
-			var blade := PackedVector2Array([Vector2(0.15, -0.16), Vector2(1.5, -0.1), Vector2(1.6, 0.0), Vector2(1.5, 0.1), Vector2(0.15, 0.16)])
-			var wsp := randf_range(1.0, 1.6) * sd
-			for i in 3:
-				var p := _bonus_pane(g, Glass.moved(blade, hub), d, -1)
-				var off := TAU * i / 3.0
-				p.move = func(pp: GPane, tt: float, _a: float): spin_about(pp, hub, off + tt * wsp)
-		_:
-			# a glass roof on four posts: easiest to hit from above
-			var roof := _bonus_pane(g, Glass.rect(-1.7, 1.7, 0.0, 3.0), d, -1, 20)
-			roof.node.transform = Transform3D(Basis(Vector3(1, 0, 0), -PI * 0.5), Vector3(x, y + 1.9, -d))
-			roof.base = roof.node.transform
-			var ps := SurfaceTool.new()
-			ps.begin(Mesh.PRIMITIVE_TRIANGLES)
-			for q in [Vector2(-1.6, 1.4), Vector2(1.6, 1.4), Vector2(-1.6, -1.4), Vector2(1.6, -1.4)]:
-				Worlds.box(ps, Vector3(q.x, 0.95, q.y), Vector3(0.1, 1.9, 0.1), Color("4a525c"))
-			ps.set_material(Worlds.lit_mat)
-			var pm := MeshInstance3D.new()
-			pm.mesh = ps.commit()
-			pm.position = Vector3(x, y, -d)
-			decor(g, pm)
-	if randf() < 0.4:
-		var tg := target("jar", Vector3(x + randf_range(-1.4, 1.4), y + 0.35, -(d - 1.3)), 0.55)
-		tg.on_hit = func(): _jar_got(tg)
+	# a crystal on the island, to hit from above
+	var tg := target("jar", Vector3(x + randf_range(-1.0, 1.0), y + 0.9, -d), 0.7)
+	tg.on_hit = func(): _jar_got(tg)
 
 
-## a rack of small coloured panes at the side of a great hall
+## at the side of a great hall: a crystal on a tall stand, to aim at
 func _side_bonus(d: float, sd: float) -> void:
 	var g := new_gate("bonus", d)
 	var x := sd * randf_range(6.0, 10.5)
-	var c0 := randi() % Glass.COLORS.size()
+	var y := randf_range(1.6, 4.2)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	Worlds.box(st, Vector3(-1.45, 1.6, 0), Vector3(0.12, 3.2, 0.12), Color("2b3138"))
-	Worlds.box(st, Vector3(1.45, 1.6, 0), Vector3(0.12, 3.2, 0.12), Color("2b3138"))
-	Worlds.box(st, Vector3(0, 0.05, 0), Vector3(3.2, 0.1, 0.6), Color("2b3138"))
+	Worlds.box(st, Vector3(0, (y - 0.5) * 0.5, 0), Vector3(0.16, y - 0.5, 0.16), Color("4a525c"))
+	Worlds.box(st, Vector3(0, 0.08, 0), Vector3(0.9, 0.16, 0.9), Color("39424c"))
 	st.set_material(Worlds.lit_mat)
 	var m := MeshInstance3D.new()
 	m.mesh = st.commit()
 	m.position = Vector3(x, 0, -d)
 	decor(g, m)
-	for cx in 3:
-		for cy in 3:
-			var x0 := x - 1.38 + cx * 0.92
-			var y0 := 0.25 + cy * 0.98
-			_bonus_pane(g, Glass.rect(x0 + 0.03, x0 + 0.89, y0, y0 + 0.92), d, c0 if (cx + cy) % 2 == 0 else (c0 + 1) % Glass.COLORS.size(), 10)
-	if randf() < 0.35:
-		var tg := target("jar", Vector3(x, 3.6, -d), 0.55)
-		tg.on_hit = func(): _jar_got(tg)
+	var tg := target("jar", Vector3(x, y, -d), 0.6)
+	tg.on_hit = func(): _jar_got(tg)
 
 
 func _spawn_in(a: float, b: float) -> void:
@@ -958,7 +932,7 @@ func _spawn_in(a: float, b: float) -> void:
 			gap = 30.0 + randf() * 8.0
 		if kind in ["layers", "prism", "snake", "frosted"]:
 			gap += 12.0 if kind == "prism" else 6.0
-		if sec != "sky" and randf() < 0.55:
+		if sec != "sky" and randf() < 0.35:
 			_jars(d + gap * 0.5)
 		next_obs += gap
 
@@ -977,6 +951,8 @@ func new_gate(kind: String, d: float) -> GGate:
 
 
 func pane(g: GGate, poly_xy: PackedVector2Array, d: float, kind: String, color_id := -1, blocks := true) -> GPane:
+	# all glass is the one colour of glass
+	color_id = -1
 	var c := Glass.centroid(poly_xy)
 	var local := Glass.ccw(Glass.moved(poly_xy, -c))
 	var mi := MeshInstance3D.new()
@@ -1035,16 +1011,9 @@ func target(kind: String, pos: Vector3, radius: float, g = null, color_id := -1)
 	var glow_col := Color(0.6, 1.0, 0.95, 0.6)
 	match kind:
 		"jar":
-			m.mesh = jar_mesh
+			# a crystal: hit it for balls
+			m.mesh = crystal_mesh
 			m.material_override = jar_mat
-			# marbles inside
-			for i in 5:
-				var b := MeshInstance3D.new()
-				b.mesh = marble_mesh
-				b.material_override = marble_mats[i % marble_mats.size()]
-				b.position = Vector3(randf_range(-0.12, 0.12), -0.2 + i * 0.07, randf_range(-0.12, 0.12))
-				b.scale = Vector3.ONE * 0.85
-				n.add_child(b)
 		"hub", "button":
 			var sm := SphereMesh.new()
 			sm.radius = 0.3
@@ -1081,7 +1050,7 @@ func target(kind: String, pos: Vector3, radius: float, g = null, color_id := -1)
 
 
 func _jars(d: float) -> void:
-	var n := 1 + (randi() % 3)
+	var n := 1 + (randi() % 2)
 	var x0 := randf_range(-2.6, 2.6)
 	var y0 := randf_range(0.9, 4.0)
 	for i in n:
@@ -1444,8 +1413,8 @@ func _crash(hit: Array, g: GGate) -> void:
 	combo_n = 0
 	combo_color = -1
 	shake = 1.0
-	hud.flash_screen(Color("ff3b3b"), 0.5, 0.5)
-	hud.show_toast("−10", Color("ff6b6b"), 0.5)
+	hud.flash_screen(Color("ff3b3b"), 0.35, 0.5)
+	hud.crack_screen()
 	sfx.play("crash", 0.0, randf_range(0.95, 1.05))
 	vibe(90)
 
@@ -1564,44 +1533,48 @@ func _update_balls(dt: float) -> void:
 		var v: Vector3 = b.v
 		v.y -= GRAV * dt
 		var nb := a + v * dt
-		# the nearest glass in the way of this step
-		var best: GPane = null
-		var best_s := 2.0
-		var best_lp := Vector2.ZERO
-		for p in panes:
-			if not p.alive or p.opened:
-				continue
-			var xf: Transform3D = p.node.global_transform
-			var pz := xf.origin.z
-			if absf(pz - a.z) > 4.0 and absf(pz - nb.z) > 4.0:
-				continue
-			var inv := xf.affine_inverse()
-			var la: Vector3 = inv * a
-			var lb: Vector3 = inv * nb
-			if la.z * lb.z > 0.0 or la.z == lb.z:
-				continue
-			var s := la.z / (la.z - lb.z)
-			if s >= best_s:
-				continue
-			var lh := la.lerp(lb, s)
-			if not Glass.inside(p.poly, Vector2(lh.x, lh.y)):
-				continue
-			best = p
-			best_s = s
-			best_lp = Vector2(lh.x, lh.y)
-		if best:
+		# every pane along this step, nearest first: thin glass breaks and the ball goes on,
+		# glass that holds stops it; it never passes through
+		var from := a
+		for guard in 6:
+			var best: GPane = null
+			var best_s := 2.0
+			var best_lp := Vector2.ZERO
+			for p in panes:
+				if not p.alive or p.opened:
+					continue
+				var xf: Transform3D = p.node.global_transform
+				var pz := xf.origin.z
+				if absf(pz - from.z) > 4.5 and absf(pz - nb.z) > 4.5:
+					continue
+				var inv := xf.affine_inverse()
+				var la: Vector3 = inv * from
+				var lb: Vector3 = inv * nb
+				if la.z * lb.z > 0.0 or la.z == lb.z:
+					continue
+				var s := la.z / (la.z - lb.z)
+				if s >= best_s:
+					continue
+				var lh := la.lerp(lb, s)
+				if not Glass.inside(p.poly, Vector2(lh.x, lh.y), 0.1):
+					continue
+				best = p
+				best_s = s
+				best_lp = Vector2(lh.x, lh.y)
+			if best == null:
+				break
 			_count_hit(b)
+			var hit_at := from.lerp(nb, best_s)
 			var res := _hit(best, best_lp, v.normalized(), b)
 			if res == "break" or res == "open":
 				v *= 0.95
-			elif res == "reflect":
-				var nrm: Vector3 = best.node.global_transform.basis.z.normalized()
-				v = (v - 2.0 * v.dot(nrm) * nrm) * 0.8
-				nb = a
-			else:
-				var nrm: Vector3 = best.node.global_transform.basis.z.normalized()
-				v = (v - 2.0 * v.dot(nrm) * nrm) * 0.3
-				nb = a
+				from = hit_at + v.normalized() * 0.01
+				continue
+			# it holds: the ball knocks back off it and drops
+			var nrm: Vector3 = best.node.global_transform.basis.z.normalized()
+			v = (v - 2.0 * v.dot(nrm) * nrm) * 0.25
+			nb = hit_at - nrm * signf(nrm.dot(nb - a)) * 0.05
+			break
 		# round things to shoot
 		for tg in targets:
 			if not tg.alive:

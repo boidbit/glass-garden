@@ -35,6 +35,9 @@ static func full(x0 := -W, x1 := W) -> PackedVector2Array:
 
 
 static func build(G, type: String, d: float, r: int) -> void:
+	# the prism worked by colour; with all glass one colour it is layers of glass instead
+	if type == "prism":
+		type = "layers"
 	var g: GGate = G.new_gate(type, d)
 	var s := g.side
 	match type:
@@ -417,9 +420,14 @@ static func build(G, type: String, d: float, r: int) -> void:
 			m.mesh = st.commit()
 			m.position = Vector3(0, 0, -d)
 			G.decor(g, m)
+			var fired := [false]
 			for p in list:
 				var pp: GPane = p
-				pp.on_break = func(): G.chain_break(list, "Domino!", 1)
+				pp.on_break = func():
+					if fired[0]:
+						return
+					fired[0] = true
+					G.chain_break(list, "Domino!", 1)
 		# ---- tricks ----
 		"hinge":
 			# thick glass on a hinge: hit it near the far edge and it swings open

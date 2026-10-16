@@ -142,8 +142,9 @@ for spans,ents in out:
 lines.append(']')
 lines.append('''
 
+## a new world every two rooms, so the place you are in changes every half a minute or so
 static func world_of(r: int) -> String:
-	return Worlds.LIST[(posmod(r, COUNT) / PER_WORLD) % Worlds.LIST.size()]
+	return Worlds.LIST[(posmod(r, COUNT) / 2) % Worlds.LIST.size()]
 
 
 static func section(r: int, local: float) -> String:
