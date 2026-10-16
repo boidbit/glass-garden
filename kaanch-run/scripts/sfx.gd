@@ -43,6 +43,7 @@ func _ready() -> void:
 	add_child(music)
 	music_old = AudioStreamPlayer.new()
 	add_child(music_old)
+	_bus()
 	_tasks.append(WorkerThreadPool.add_task(_build_all))
 
 
@@ -78,6 +79,24 @@ func play_music(key: String) -> void:
 	_mutex.unlock()
 	if not have:
 		_tasks.append(WorkerThreadPool.add_task(func(): _make_track(key)))
+
+
+## the glass sounds go through a little reverb, so they ring in the space you are in
+func _bus() -> void:
+	var idx := AudioServer.get_bus_index("Fx")
+	if idx < 0:
+		AudioServer.add_bus()
+		idx = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(idx, "Fx")
+		AudioServer.set_bus_send(idx, "Master")
+		var rv := AudioEffectReverb.new()
+		rv.room_size = 0.45
+		rv.damping = 0.55
+		rv.wet = 0.14
+		rv.dry = 1.0
+		AudioServer.add_bus_effect(idx, rv)
+	for p in players:
+		p.bus = "Fx"
 
 
 func _exit_tree() -> void:
@@ -116,8 +135,17 @@ func beat_phase(t: float) -> float:
 	return fmod(t / beat, 1.0)
 
 
+# only the sounds of the game itself: the ball, and glass; everything else is the music
+const ALLOWED := ["shatter0", "shatter1", "shatter2", "heavy", "thud", "crack", "crash", "throw", "roll"]
+var _alts := {}
+
+
 func play(name: String, db := 0.0, pitch := 1.0) -> void:
-	if not sound_on or not _ready_sfx or not streams.has(name):
+	if not sound_on or not _ready_sfx or not (name in ALLOWED):
+		return
+	if _alts.has(name):
+		name = _alts[name].pick_random()
+	if not streams.has(name):
 		return
 	var p := players[_next]
 	_next = (_next + 1) % players.size()
@@ -128,8 +156,8 @@ func play(name: String, db := 0.0, pitch := 1.0) -> void:
 
 
 ## a note of a scale, higher each time (for things breaking one after another)
-func note(n: int) -> void:
-	play("note%d" % (n % 10), -6.0)
+func note(_n: int) -> void:
+	pass
 
 
 # ---------- making sounds ----------
@@ -178,23 +206,49 @@ func _noise(b: PackedFloat32Array, t0: float, len: float, amp: float, decay: flo
 		b[i] += y * amp * exp(-float(i - s) / RATE * decay)
 
 
+## glass breaking, in layers: the first sharp crack, the fracture running through it, the glass ringing,
+## and then the pieces landing, fewer and fewer. big runs from 0 (a small pane) to 1 (a big one)
 func _shatter(big: float) -> PackedFloat32Array:
-	var b := _buf(0.95)
+	var b := _buf(1.15)
+	# the crack: a sharp click of bright noise
 	var prev := 0.0
+	for i in int(RATE * 0.006):
+		var nz := randf() * 2.0 - 1.0
+		b[i] += (nz - prev) * (1.0 - float(i) / (RATE * 0.006)) * 0.9
+		prev = nz
+	# the fracture running through: little bursts close together
+	for k in 3 + int(big * 6.0):
+		var t0 := randf_range(0.002, 0.03 + 0.09 * big)
+		var s0 := int(t0 * RATE)
+		var ln := int(randf_range(0.004, 0.014) * RATE)
+		prev = 0.0
+		for i in ln:
+			if s0 + i >= b.size():
+				break
+			var nz := randf() * 2.0 - 1.0
+			b[s0 + i] += (nz - prev) * 0.55 * exp(-float(i) / ln * 3.0)
+			prev = nz
+	# the body of it: bright noise falling away
+	prev = 0.0
 	for i in b.size():
 		var t := float(i) / RATE
 		var nz := randf() * 2.0 - 1.0
-		var hp := nz - prev * 0.7
+		b[i] += (nz - prev * 0.6) * 0.42 * exp(-t * (16.0 - 7.0 * big))
 		prev = nz
-		b[i] = hp * 0.55 * exp(-t * (10.0 + 6.0 * (1.0 - big))) + nz * 0.25 * exp(-t * 45.0)
-	for i in int(RATE * 0.12):
+	# the glass ringing for a moment
+	for k in 5:
+		var f := randf_range(1500.0, 4200.0) if big > 0.6 else randf_range(2400.0, 6800.0)
+		_ping(b, randf_range(0.0, 0.01), f, randf_range(0.06, 0.13), randf_range(22.0, 45.0), 0.4)
+	# a low knock for big panes
+	for i in int(RATE * 0.16):
 		var t := float(i) / RATE
-		b[i] += sin(TAU * (150.0 - 420.0 * t) * t) * 0.45 * big * exp(-t * 28.0)
-	# glittering pieces landing, and a few later ones bouncing
-	for k in 22:
-		_ping(b, pow(randf(), 1.7) * 0.5, randf_range(2300.0, 7600.0), randf_range(0.05, 0.16), randf_range(18.0, 40.0), 0.14)
-	for k in 8:
-		_ping(b, randf_range(0.35, 0.8), randf_range(3000.0, 6500.0), randf_range(0.02, 0.06), 35.0, 0.1)
+		b[i] += sin(TAU * (90.0 + 40.0 * (1.0 - big)) * t) * 0.35 * big * exp(-t * 26.0)
+	# the pieces landing: many at first, fewer later, each a tiny click and ring
+	for k in 24 + int(big * 30.0):
+		var t0 := 0.07 + pow(randf(), 1.8) * (0.55 + 0.4 * big)
+		var amp := randf_range(0.03, 0.11) * (1.0 - t0 * 0.7)
+		_noise(b, t0, 0.004, amp * 1.5, 900.0, 0.8)
+		_ping(b, t0, randf_range(2600.0, 9000.0), amp, randf_range(55.0, 120.0), 0.06)
 	return b
 
 
@@ -235,9 +289,21 @@ func _build_all() -> void:
 		th[i] += sin(TAU * 170.0 * t) * 0.7 * exp(-t * 26.0)
 	_ping(th, 0.0, 2200.0, 0.12, 45.0)
 	streams["thud"] = _wav(th)
-	streams["shatter0"] = _wav(_shatter(1.0))
-	streams["shatter1"] = _wav(_shatter(0.7))
-	streams["shatter2"] = _wav(_shatter(0.45))
+	# three of each size, so the same pane never sounds quite the same twice
+	for v in 3:
+		var names := []
+		for k in 3:
+			var nm := "shatter%d_%d" % [v, k]
+			streams[nm] = _wav(_shatter([1.0, 0.65, 0.3][v] + randf_range(-0.08, 0.08)))
+			names.append(nm)
+		_alts["shatter%d" % v] = names
+	# an iron ball landing and rolling
+	var rl := _buf(0.4)
+	for i in rl.size():
+		var t := float(i) / RATE
+		rl[i] = sin(TAU * 140.0 * t) * 0.6 * exp(-t * 18.0) + sin(TAU * 520.0 * t) * 0.2 * exp(-t * 40.0)
+	_noise(rl, 0.0, 0.3, 0.25, 12.0, 0.08)
+	streams["roll"] = _wav(rl)
 	var c := _buf(0.3)
 	_noise(c, 0.0, 0.3, 0.6, 90.0)
 	for i in c.size():

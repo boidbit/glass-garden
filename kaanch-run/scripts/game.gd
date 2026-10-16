@@ -11,8 +11,8 @@ const START_BALLS := 25
 const SEG := Worlds.SEG
 const HALF_W := Worlds.HALF_W
 const CEIL := Worlds.CEIL
-const BALL_SPEED := 52.0
-const GRAV := 4.0
+const BALL_SPEED := 60.0
+const GRAV := 2.5
 
 enum S { MENU, PLAY, PAUSE, OVER, DONE }
 
@@ -263,27 +263,25 @@ func _make_scene() -> void:
 	fx.setup(cam, glow_tex, crack_tex)
 	# marbles: little balls of coloured glass
 	marble_mesh = SphereMesh.new()
-	marble_mesh.radius = 0.13
-	marble_mesh.height = 0.26
-	marble_mesh.radial_segments = 16
-	marble_mesh.rings = 8
-	var swirl := _swirl_texture()
-	for c in Glass.COLORS:
-		var m := StandardMaterial3D.new()
-		m.albedo_texture = swirl
-		m.albedo_color = Color(lerpf(c.r, 1.0, 0.2), lerpf(c.g, 1.0, 0.2), lerpf(c.b, 1.0, 0.2), 0.95)
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.emission_enabled = true
-		m.emission_texture = swirl
-		m.emission = c
-		m.emission_energy_multiplier = 0.35
-		m.roughness = 0.02
-		m.metallic = 0.25
-		m.metallic_specular = 1.0
-		m.rim_enabled = true
-		m.rim = 0.7
-		m.rim_tint = 0.2
-		marble_mats.append(m)
+	marble_mesh.radius = 0.2
+	marble_mesh.height = 0.4
+	marble_mesh.radial_segments = 20
+	marble_mesh.rings = 10
+	# a ball of polished iron: the bright sky and dark ground of a chrome sphere are painted on, so it shines anywhere
+	var chrome := _chrome_texture()
+	var im := StandardMaterial3D.new()
+	im.albedo_texture = chrome
+	im.metallic = 0.55
+	im.roughness = 0.22
+	im.metallic_specular = 1.0
+	im.emission_enabled = true
+	im.emission_texture = chrome
+	im.emission = Color(0.55, 0.58, 0.62)
+	im.emission_energy_multiplier = 0.45
+	im.rim_enabled = true
+	im.rim = 0.6
+	im.rim_tint = 0.1
+	marble_mats.append(im)
 	# a jar of marbles
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.26
@@ -328,6 +326,24 @@ func _make_scene() -> void:
 	mark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mark_mat.albedo_color = Color("ff5a3c")
 	mark_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+
+## the look of polished iron on a sphere: light above, a dark band at the horizon, grey below
+func _chrome_texture() -> Texture2D:
+	var img := Image.create(8, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		var v := float(y) / 63.0
+		var c: float
+		if v < 0.42:
+			c = lerpf(0.98, 0.62, v / 0.42)
+		elif v < 0.52:
+			c = lerpf(0.62, 0.16, (v - 0.42) / 0.1)
+		else:
+			c = lerpf(0.3, 0.46, (v - 0.52) / 0.48)
+		for x in 8:
+			img.set_pixel(x, y, Color(c * 0.96, c * 0.98, c, 1.0))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## the inside of a marble: clear glass with a twisted ribbon of colour
@@ -1527,13 +1543,15 @@ func _throw(dir: Vector3) -> void:
 		var d2 := dir
 		if i > 0:
 			d2 = dir.rotated(Vector3.UP, (0.035 if i == 1 else -0.035))
-		var ci := randi() % marble_mats.size()
 		var mi := MeshInstance3D.new()
 		mi.mesh = marble_mesh
-		mi.material_override = marble_mats[ci]
+		mi.material_override = marble_mats[0]
 		mi.position = from
 		root3d.add_child(mi)
-		flying.append({"node": mi, "v": d2 * (BALL_SPEED + speed), "life": 0.0, "pts": [from], "col": Glass.COLORS[ci], "shot": shot})
+		flying.append({"node": mi, "v": d2 * (BALL_SPEED + speed), "life": 0.0, "pts": [from], "col": Color(0.78, 0.82, 0.88), "shot": shot, "landed": false})
+	# you feel the weight leave your hand
+	fov_kick = maxf(fov_kick, 0.6)
+	shake = maxf(shake, 0.06)
 	sfx.play("throw", -10.0, randf_range(0.9, 1.15))
 
 
@@ -1575,7 +1593,7 @@ func _update_balls(dt: float) -> void:
 			_count_hit(b)
 			var res := _hit(best, best_lp, v.normalized(), b)
 			if res == "break" or res == "open":
-				v *= 0.85
+				v *= 0.95
 			elif res == "reflect":
 				var nrm: Vector3 = best.node.global_transform.basis.z.normalized()
 				v = (v - 2.0 * v.dot(nrm) * nrm) * 0.8
@@ -1595,10 +1613,15 @@ func _update_balls(dt: float) -> void:
 					tg.on_hit.call()
 				_target_burst(tg)
 		var bsec := section_at(-nb.z)
-		if nb.y < 0.13 and bsec != "sky":
-			nb.y = 0.13
-			v.y = absf(v.y) * 0.45
-			v.x *= 0.8
+		if nb.y < 0.2 and bsec != "sky":
+			# iron does not bounce: it lands with a thud and rolls on
+			nb.y = 0.2
+			if not b.landed and v.y < -1.0:
+				b.landed = true
+				sfx.play("roll", -14.0, randf_range(0.9, 1.1))
+			v.y = absf(v.y) * 0.06
+			v.x *= 0.92
+			v.z *= 0.97
 		var lim := INF if bsec == "sky" else (Worlds.HALL_W - 0.3 if bsec == "hall" else HALF_W - 0.13)
 		if absf(nb.x) > lim:
 			nb.x = signf(nb.x) * lim
@@ -1769,14 +1792,18 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		var cc := Glass.centroid(cell)
 		var mi := _mesh_shard(Glass.moved(cell, -cc), p.kind, p.color_id)
 		mi.global_transform = xf * Transform3D(Basis(), Vector3(cc.x, cc.y, 0))
+		# pieces near where the ball struck fly with it, fast; pieces further off fall away slower;
+		# big heavy pieces move less than small ones
 		var away: Vector3 = mi.global_transform.origin - hit_w
-		var v := away.normalized() * randf_range(1.5, 4.5) + dir * randf_range(2.0, 6.0) + Vector3(0, randf_range(0.5, 2.5), 0)
+		var r := away.length()
+		var near := exp(-r * 0.9)
+		var mass := clampf(0.5 + absf(Glass.area(cell)) * 0.9 + K.t * 1.2, 0.5, 3.0)
+		var v := (dir * (2.0 + 9.0 * near) + away.normalized() * (1.0 + 3.5 * near) + Vector3(0, randf_range(0.2, 1.6), 0)) / mass
+		v += Vector3(randf_range(-0.5, 0.5), randf_range(-0.3, 0.3), randf_range(-0.5, 0.5))
 		if crash:
-			v = away.normalized() * randf_range(2.0, 5.0) + Vector3(0, randf_range(1.0, 3.0), -speed * 0.6)
-		if K.t >= 0.3:
-			v *= 0.55
+			v = away.normalized() * randf_range(2.0, 5.0) / mass + Vector3(0, randf_range(1.0, 3.0), -speed * 0.6)
 		var axis := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
-		shards.append({"node": mi, "v": v, "axis": axis, "w": randf_range(3.0, 11.0) * (0.5 if K.t >= 0.3 else 1.0), "life": 0.0})
+		shards.append({"node": mi, "v": v, "axis": axis, "w": randf_range(3.0, 12.0) / mass, "life": 0.0, "mass": mass, "rest": false})
 	p.node.queue_free()
 	var cap := 260 if save.quality > 0 else 120
 	while shards.size() > cap:
@@ -1793,7 +1820,9 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		else:
 			var v := clampi(int(3.0 - area * 0.4), 0, 2)
 			var pitch := randf_range(1.12, 1.3) if p.kind == "thin" else randf_range(0.92, 1.1)
-			sfx.play("shatter%d" % v, -1.0 if area > 3.0 else -4.0, pitch)
+			# a colour combo makes the glass ring brighter and louder each time
+			var cb := minf(float(combo_n), 10.0) if p.color_id >= 0 and p.color_id == combo_color else 0.0
+			sfx.play("shatter%d" % v, (-1.0 if area > 3.0 else -4.0) + cb * 0.4, pitch * (1.0 + cb * 0.025))
 		if p.color_id >= 0:
 			sfx.note(combo_n)
 	if not crash and area > 3.0:
@@ -1855,9 +1884,9 @@ func _jar_got(_tg: GTarget) -> void:
 	var want := 3 if jar_streak >= 25 else 2 if jar_streak >= 10 else 1
 	if want > multi:
 		multi = want
-		hud.show_toast("×%d MARBLES" % multi, Hud.ACCENT, 0.6)
+		hud.show_toast("×%d BALLS" % multi, Hud.ACCENT, 0.6)
 		sfx.play("multi", -2.0)
-	sfx.play("crystal", -3.0, randf_range(0.95, 1.08))
+	sfx.play("shatter2", -5.0, randf_range(1.25, 1.4))
 
 
 func break_all(list: Array, text: String, bonus: int) -> void:
@@ -2123,11 +2152,11 @@ func _charge_step(p: GPane, ahead: float) -> void:
 	if k >= 1.0:
 		p.charge = -1.0
 		p.kind = "slab"
-		p.hp = 3
+		p.hp = 2
 		p.color_id = 4
 		p.node.mesh = Glass.slab_mesh(p.poly, "slab", 1.0, 4)
 		fx.flash(p.node.global_transform.origin, Color("b98bff"), 4.0)
-		hud.show_toast("Charged: 3 hits", Color("b98bff"), 0.5)
+		hud.show_toast("Charged: 2 hits", Color("b98bff"), 0.5)
 		sfx.play("boom", -4.0, 1.4)
 
 
@@ -2184,22 +2213,45 @@ func _update_shards(dt: float) -> void:
 		var s: Dictionary = shards[i]
 		var n: MeshInstance3D = s.node
 		var v: Vector3 = s.v
-		if s.has("slide"):
-			v *= exp(-dt * 1.2)
+		var pos := n.position
+		if s.get("rest", false):
+			pass
 		else:
-			v.y -= 14.0 * dt
-		var pos := n.position + v * dt
-		if pos.y < 0.06 and section_at(-pos.z) != "sky":
-			pos.y = 0.06
-			v.y = absf(v.y) * 0.3
-			v.x *= 0.6
-			v.z *= 0.6
-			s.w *= 0.6
-		n.position = pos
-		n.rotate(s.axis, s.w * dt)
+			if s.has("slide"):
+				v *= exp(-dt * 1.2)
+			else:
+				v.y -= 14.0 * dt
+				v *= exp(-dt * 0.15)
+			pos += v * dt
+			var sec := section_at(-pos.z)
+			# the floor: glass bounces a little, skids, and comes to rest
+			if pos.y < 0.05 and sec != "sky":
+				pos.y = 0.05
+				var m: float = s.get("mass", 1.0)
+				if absf(v.y) > 1.2:
+					v.y = absf(v.y) * (0.32 / m)
+					s.w = s.w * 0.55
+				else:
+					v.y = 0.0
+				v.x *= exp(-dt * 6.0)
+				v.z *= exp(-dt * 6.0)
+				s.w *= exp(-dt * 8.0)
+				if v.length() < 0.25 and pos.y <= 0.051:
+					s.rest = true
+					v = Vector3.ZERO
+					# lying flat on the floor
+					n.basis = Basis(Vector3(1, 0, 0), PI * 0.5).rotated(Vector3.UP, randf() * TAU).scaled(n.basis.get_scale())
+			# the walls
+			var lim := INF if sec == "sky" else (Worlds.HALL_W - 0.2 if sec == "hall" else HALF_W - 0.1)
+			if absf(pos.x) > lim:
+				pos.x = signf(pos.x) * lim
+				v.x = -v.x * 0.35
+			n.position = pos
+			if not s.get("rest", false):
+				n.rotate(s.axis, s.w * dt)
 		s.v = v
 		s.life += dt
-		if s.life > 5.0 or -pos.z < dist - 4.0 or pos.y < -40.0:
+		if s.life > 6.0 or -pos.z < dist - 4.0 or pos.y < -40.0:
 			_free_shard(n)
 			shards.remove_at(i)
 		i -= 1

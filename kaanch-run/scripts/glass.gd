@@ -7,13 +7,13 @@ const KINDS := {
 	"thin": {"t": 0.04, "hp": 1, "face": Color(0.82, 0.95, 0.97, 0.16), "side": Color(0.72, 0.92, 0.9, 0.7), "rim": Color(0.92, 1.0, 1.0, 0.5), "rim_w": 0.035, "pieces": 14},
 	"mid": {"t": 0.1, "hp": 1, "face": Color(0.7, 0.92, 0.92, 0.24), "side": Color(0.55, 0.85, 0.82, 0.85), "rim": Color(0.85, 0.98, 0.97, 0.6), "rim_w": 0.045, "pieces": 11},
 	"thick": {"t": 0.34, "hp": 2, "face": Color(0.5, 0.82, 0.78, 0.36), "side": Color(0.26, 0.6, 0.55, 0.94), "rim": Color(0.6, 0.9, 0.84, 0.85), "rim_w": 0.08, "pieces": 8},
-	"slab": {"t": 0.6, "hp": 3, "face": Color(0.38, 0.72, 0.66, 0.5), "side": Color(0.18, 0.48, 0.44, 0.97), "rim": Color(0.5, 0.82, 0.76, 0.9), "rim_w": 0.1, "pieces": 7},
+	"slab": {"t": 0.6, "hp": 2, "face": Color(0.38, 0.72, 0.66, 0.5), "side": Color(0.18, 0.48, 0.44, 0.97), "rim": Color(0.5, 0.82, 0.76, 0.9), "rim_w": 0.1, "pieces": 7},
 	# a brick of glass: very thick, breaks into heavy chunks
 	"block": {"t": 0.9, "hp": 2, "face": Color(0.45, 0.78, 0.72, 0.44), "side": Color(0.2, 0.52, 0.47, 0.96), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.09, "pieces": 6},
 	# a giant cube of glass, as wide as the way and two metres deep
 	"giant": {"t": 2.0, "hp": 2, "face": Color(0.42, 0.75, 0.7, 0.4), "side": Color(0.2, 0.5, 0.46, 0.9), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.12, "pieces": 7},
 	# a mirror: silvered, the first ball bounces off it
-	"mirror": {"t": 0.08, "hp": 2, "face": Color(0.85, 0.88, 0.92, 0.94), "side": Color(0.5, 0.55, 0.6, 1.0), "rim": Color(0.9, 0.93, 0.96, 0.8), "rim_w": 0.05, "pieces": 10},
+	"mirror": {"t": 0.08, "hp": 1, "face": Color(0.85, 0.88, 0.92, 0.94), "side": Color(0.5, 0.55, 0.6, 1.0), "rim": Color(0.9, 0.93, 0.96, 0.8), "rim_w": 0.05, "pieces": 10},
 	# tempered: bursts into little cubes
 	"tempered": {"t": 0.07, "hp": 1, "face": Color(0.72, 0.93, 0.88, 0.24), "side": Color(0.55, 0.85, 0.78, 0.8), "rim": Color(0.85, 0.98, 0.95, 0.55), "rim_w": 0.04, "pieces": 5},
 	# laminated: cracks and sags first, then falls in one sheet

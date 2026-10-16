@@ -1,4 +1,4 @@
-## Everything on top of the game: the menus, the marble counter, the score and combo, pause and the end cards.
+## Everything on top of the game: the menus, the ball counter, the score and combo, pause and the end cards.
 class_name Hud
 extends CanvasLayer
 
@@ -163,7 +163,6 @@ func _button(text: String, primary := false, w := 340) -> Button:
 func _ball_icon(px: int) -> ImageTexture:
 	var img := Image.create(px, px, false, Image.FORMAT_RGBA8)
 	var c := Vector2(px, px) * 0.5
-	var base := Color("4d8dff")
 	for y in px:
 		for x in px:
 			var p := Vector2(x + 0.5, y + 0.5)
@@ -172,8 +171,10 @@ func _ball_icon(px: int) -> ImageTexture:
 				img.set_pixel(x, y, Color(0, 0, 0, 0))
 				continue
 			var hl := 1.0 - clampf(p.distance_to(c - Vector2(px, px) * 0.18) / (px * 0.55), 0.0, 1.0)
-			var swirl := 0.5 + 0.5 * sin((p.x - p.y) * 0.25 + d * 6.0)
-			var col := base.lerp(Color("ff4d6d"), swirl * 0.5).lerp(Color.WHITE, hl * 0.8)
+			# polished iron: bright above, a dark band across the middle, grey below
+			var v := (p.y / px)
+			var g := lerpf(0.92, 0.55, v / 0.48) if v < 0.48 else (lerpf(0.18, 0.5, (v - 0.48) / 0.52))
+			var col := Color(g * 0.95, g * 0.97, g).lerp(Color.WHITE, hl * 0.6)
 			col.a = clampf((1.0 - d) * px * 0.5, 0.0, 1.0)
 			img.set_pixel(x, y, col)
 	return ImageTexture.create_from_image(img)
@@ -613,7 +614,7 @@ func _build_pause() -> Control:
 func _build_over() -> Control:
 	var c := _card()
 	var box: VBoxContainer = c[1]
-	over_title = _label("Out of marbles", f800, 44)
+	over_title = _label("Out of balls", f800, 44)
 	over_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(over_title)
 	over_big = _label("0 m", title_font, 92, ACCENT)
@@ -727,7 +728,7 @@ func show_pause(mode: String) -> void:
 func show_over_endless(d: int, best: int, cp: int, new_best: bool, score: int) -> void:
 	_hide_all()
 	over_panel.visible = true
-	over_title.text = "New best!" if new_best else "Out of marbles"
+	over_title.text = "New best!" if new_best else "Out of balls"
 	over_big.text = "%d m" % d
 	over_sub.text = "Best %d m  ·  Score %d" % [best, score]
 	cont_btn.visible = cp > 0
@@ -737,7 +738,7 @@ func show_over_endless(d: int, best: int, cp: int, new_best: bool, score: int) -
 func show_over_level(d: int, total: int, score: int) -> void:
 	_hide_all()
 	over_panel.visible = true
-	over_title.text = "Out of marbles"
+	over_title.text = "Out of balls"
 	over_big.text = "%d%%" % int(100.0 * d / maxf(1.0, total))
 	over_sub.text = "of the level  ·  Score %d" % score
 	cont_btn.visible = false
