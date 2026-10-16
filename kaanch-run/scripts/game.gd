@@ -69,6 +69,8 @@ var last_kind := ""
 var look_now := {}
 var cam_pitch := -2.5
 var backdrop: MeshInstance3D
+var shadow_mat: StandardMaterial3D
+var dust: CPUParticles3D
 var backdrop_im: ImmediateMesh
 var sec_now := "corridor"
 var look_to := {}
@@ -93,6 +95,8 @@ var quit_at := -1.0
 var shot_dir := "user://"
 var test_screen := ""
 var test_mode := ""
+var test_from := 0
+var remix := 0          # 0 the first time through the 50 rooms, 1 the second, ...
 var log_n := 0
 
 
@@ -112,6 +116,8 @@ func _ready() -> void:
 			test_screen = a.substr(9)
 		elif a.begins_with("--mode="):
 			test_mode = a.substr(7)
+		elif a.begins_with("--from="):
+			test_from = int(a.substr(7))
 	_load()
 	cp_room = int(save.cp)
 	Glass.mats()
@@ -136,7 +142,7 @@ func _ready() -> void:
 	hud.show_menu(save)
 	sfx.play_music("menu")
 	if auto:
-		_start(test_mode if test_mode != "" else "level1")
+		_start(test_mode if test_mode != "" else "level1", test_from)
 	if test_screen != "":
 		_screen_test()
 
@@ -219,6 +225,37 @@ func _make_scene() -> void:
 	add_child(backdrop)
 	glow_tex = _glow_texture()
 	crack_tex = _crack_texture()
+	shadow_mat = StandardMaterial3D.new()
+	shadow_mat.albedo_texture = glow_tex
+	shadow_mat.albedo_color = Color(0, 0, 0, 0.55)
+	shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# specks of dust in the air, drifting past: you feel the speed and the depth everywhere
+	dust = CPUParticles3D.new()
+	dust.amount = 70
+	dust.lifetime = 3.0
+	dust.local_coords = false
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	dust.emission_box_extents = Vector3(7.0, 3.2, 14.0)
+	dust.direction = Vector3(0, 0.2, 0)
+	dust.spread = 180.0
+	dust.initial_velocity_min = 0.05
+	dust.initial_velocity_max = 0.3
+	dust.gravity = Vector3.ZERO
+	var dq := QuadMesh.new()
+	dq.size = Vector2(0.07, 0.07)
+	var dm := StandardMaterial3D.new()
+	dm.albedo_texture = glow_tex
+	dm.albedo_color = Color(1.0, 0.95, 0.85, 0.5)
+	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	dq.material = dm
+	dust.mesh = dq
+	dust.scale_amount_min = 0.5
+	dust.scale_amount_max = 1.6
+	add_child(dust)
 	fx = Fx.new()
 	add_child(fx)
 	fx.setup(cam, glow_tex, crack_tex)
@@ -228,15 +265,22 @@ func _make_scene() -> void:
 	marble_mesh.height = 0.26
 	marble_mesh.radial_segments = 16
 	marble_mesh.rings = 8
+	var swirl := _swirl_texture()
 	for c in Glass.COLORS:
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(c.r, c.g, c.b, 0.9)
+		m.albedo_texture = swirl
+		m.albedo_color = Color(lerpf(c.r, 1.0, 0.2), lerpf(c.g, 1.0, 0.2), lerpf(c.b, 1.0, 0.2), 0.95)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.emission_enabled = true
+		m.emission_texture = swirl
 		m.emission = c
-		m.emission_energy_multiplier = 0.45
-		m.roughness = 0.05
-		m.metallic = 0.3
+		m.emission_energy_multiplier = 0.35
+		m.roughness = 0.02
+		m.metallic = 0.25
+		m.metallic_specular = 1.0
+		m.rim_enabled = true
+		m.rim = 0.7
+		m.rim_tint = 0.2
 		marble_mats.append(m)
 	# a jar of marbles
 	var cyl := CylinderMesh.new()
@@ -282,6 +326,23 @@ func _make_scene() -> void:
 	mark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mark_mat.albedo_color = Color("ff5a3c")
 	mark_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+
+## the inside of a marble: clear glass with a twisted ribbon of colour
+func _swirl_texture() -> Texture2D:
+	var W := 64
+	var H := 32
+	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
+	for y in H:
+		for x in W:
+			var u := float(x) / W
+			var v := float(y) / H
+			var band := absf(sin((u * 2.0 + v * 1.3) * PI))
+			var k := clampf((band - 0.72) / 0.28, 0.0, 1.0)
+			var glassy := 0.55 + 0.45 * pow(1.0 - absf(v - 0.35) * 1.4, 4.0)
+			img.set_pixel(x, y, Color(lerpf(0.75, 1.0, k) * glassy, lerpf(0.82, 1.0, k) * glassy, lerpf(0.86, 1.0, k) * glassy, lerpf(0.55, 1.0, k)))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## a prism: a long triangular crystal
@@ -354,6 +415,7 @@ func _crack_texture() -> Texture2D:
 func _start(m: String, from_room := 0) -> void:
 	mode = m
 	_reset(m, from_room)
+	remix = from_room / Rooms.COUNT
 	state = S.PLAY
 	balls = START_BALLS + 5
 	jar_streak = 0
@@ -485,6 +547,8 @@ func _room_of(d: float) -> int:
 func _world_at(d: float) -> String:
 	if mode == "level1" or mode == "menu":
 		return Levels.L1_WORLD
+	if mode == "endless":
+		return Rooms.world_of(_room_of(d))
 	return Worlds.world_of(_room_of(d))
 
 
@@ -528,6 +592,33 @@ func _apply_look() -> void:
 		for v in [[-400.0, y0, c0], [400.0, y0, c0], [400.0, y1, c1], [-400.0, y0, c0], [400.0, y1, c1], [-400.0, y1, c1]]:
 			backdrop_im.surface_set_color(v[2])
 			backdrop_im.surface_add_vertex(Vector3(v[0], v[1], 0))
+	# the world's skyline far away, in two layers of haze, with little lit windows
+	if k > 0.01 and world != "":
+		var sk: Dictionary = Worlds.skyline(world)
+		var c_far: Color = bg.lerp(hor.lerp(top, 0.3) * 0.82, k)
+		var c_near: Color = bg.lerp(low.lerp(top, 0.15) * 0.7, k)
+		for layer in 2:
+			for e in sk.shapes:
+				if e[1] != layer:
+					continue
+				var poly: PackedVector2Array = e[0]
+				var cx := 0.0
+				for q in poly:
+					cx += q.x
+				cx /= poly.size()
+				var cb := Vector2(cx, poly[0].y)
+				var col: Color = c_far if layer == 0 else c_near
+				backdrop_im.surface_set_color(col)
+				for i in poly.size():
+					var q0 := poly[i]
+					var q1 := poly[(i + 1) % poly.size()]
+					for q in [cb, q0, q1]:
+						backdrop_im.surface_add_vertex(Vector3(q.x, q.y, 1.0 + layer))
+		var lc: Color = bg.lerp((Worlds.TUNE[world].lights[0] as Color) * 0.85, k)
+		backdrop_im.surface_set_color(lc)
+		for q in sk.lights:
+			for v in [Vector2(-0.5, -0.6), Vector2(0.5, -0.6), Vector2(0.5, 0.6), Vector2(-0.5, -0.6), Vector2(0.5, 0.6), Vector2(-0.5, 0.6)]:
+				backdrop_im.surface_add_vertex(Vector3(q.x + v.x, q.y + v.y, 3.0))
 	backdrop_im.surface_end()
 	sun.light_color = look_now.sun
 	sun.light_energy = look_now.sun_e
@@ -560,6 +651,8 @@ func _stream() -> void:
 		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev)
 		root3d.add_child(seg)
 		segs.append({"node": seg, "d": d0})
+		if mode == "endless":
+			seed(hash([next_seg, remix, "x"]))
 		_extras(d0, sec)
 		_spawn_in(d0, d0 + SEG)
 		next_seg += 1
@@ -579,6 +672,8 @@ func _sec_raw(d: float) -> String:
 		return "corridor"
 	var r := _room_of(d)
 	var local := d - r * ROOM_LEN
+	if mode == "endless":
+		return Rooms.section(r, local)
 	var pair: Array = Worlds.SECT[Worlds.world_of(r)][(r / Worlds.LIST.size()) % 2]
 	if local >= 32.0 and local < 96.0:
 		return pair[0]
@@ -615,31 +710,73 @@ func _bonus_pane(g: GGate, poly: PackedVector2Array, d: float, color_id: int, pt
 ## a little floating island below the way, with glass on it to break from above
 func _island(d: float) -> void:
 	var g := new_gate("bonus", d)
-	var T: Dictionary = Worlds.TUNE[_world_at(d)]
-	var acc: Color = Worlds.def(_world_at(d)).accent
+	var w := _world_at(d)
+	var T: Dictionary = Worlds.TUNE[w]
+	var acc: Color = Worlds.def(w).accent
 	var sd := -1.0 if randf() < 0.5 else 1.0
 	var x := randf_range(1.0, 6.0) * sd
 	var y := randf_range(-7.0, -3.5)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	Worlds.box(st, Vector3(0, -0.3, 0), Vector3(4.6, 0.6, 4.0), T.floor_a)
-	Worlds.box(st, Vector3(0, -1.0, 0), Vector3(3.4, 0.8, 3.0), T.floor_b * 0.8)
-	Worlds.box(st, Vector3(0, -1.8, 0), Vector3(2.0, 0.8, 1.8), T.floor_b * 0.6)
+	var rock: Color = T.wall.lerp(Color("2a2a30"), 0.5)
+	# the top, with a raised metal rim
+	Worlds.box(st, Vector3(0, -0.2, 0), Vector3(4.6, 0.4, 4.0), T.floor_a)
+	Worlds.box(st, Vector3(0, 0.03, 2.0), Vector3(4.8, 0.12, 0.16), Color("4a525c"))
+	Worlds.box(st, Vector3(0, 0.03, -2.0), Vector3(4.8, 0.12, 0.16), Color("4a525c"))
+	Worlds.box(st, Vector3(2.32, 0.03, 0), Vector3(0.16, 0.12, 4.0), Color("4a525c"))
+	Worlds.box(st, Vector3(-2.32, 0.03, 0), Vector3(0.16, 0.12, 4.0), Color("4a525c"))
+	Worlds.box(st, Vector3(0, -0.55, 0), Vector3(4.7, 0.3, 4.1), Color("39424c"))
+	# the rock underneath, in layers getting smaller, ending in a point
+	var widths := [4.2, 3.4, 2.6, 1.7, 0.9]
+	for i in widths.size():
+		var ww: float = widths[i]
+		Worlds.box(st, Vector3(randf_range(-0.15, 0.15), -0.95 - i * 0.6, randf_range(-0.15, 0.15)), Vector3(ww, 0.62, ww * 0.9), rock * (1.0 - i * 0.1))
+	# a few crystals hanging below
+	for i in 3:
+		var cx := randf_range(-1.2, 1.2)
+		var cz := randf_range(-1.0, 1.0)
+		Worlds.box(st, Vector3(cx, -1.6 - i * 0.3, cz), Vector3(0.2, 0.9, 0.2), Color("8fd8d0"))
+	# something of the world standing on it
+	match w:
+		"venice":
+			for q in [Vector2(-2.0, 1.7), Vector2(2.0, -1.7)]:
+				for k in 4:
+					Worlds.box(st, Vector3(q.x, 0.25 + k * 0.5, q.y), Vector3(0.16, 0.5, 0.16), Color("c8302c") if k % 2 == 0 else Color("f4f0e8"))
+		"lanterns", "cathedral", "mosaic":
+			Worlds.box(st, Vector3(-2.0, 0.9, 1.7), Vector3(0.1, 1.8, 0.1), Color("2b3138"))
+		"sheesh":
+			for q in [Vector2(-1.9, 1.6), Vector2(1.9, 1.6)]:
+				Worlds.box(st, Vector3(q.x, 0.7, q.y), Vector3(0.14, 1.4, 0.14), Color("e8b64a"))
 	st.set_material(Worlds.lit_mat)
 	var m := MeshInstance3D.new()
 	m.mesh = st.commit()
 	var gs := SurfaceTool.new()
 	gs.begin(Mesh.PRIMITIVE_TRIANGLES)
-	Worlds.box(gs, Vector3(0, -0.02, 2.02), Vector3(4.6, 0.08, 0.06), acc)
-	Worlds.box(gs, Vector3(0, -0.02, -2.02), Vector3(4.6, 0.08, 0.06), acc)
-	Worlds.box(gs, Vector3(2.32, -0.02, 0), Vector3(0.06, 0.08, 4.0), acc)
-	Worlds.box(gs, Vector3(-2.32, -0.02, 0), Vector3(0.06, 0.08, 4.0), acc)
+	# a thin bright strip round the side, and the lamp
+	Worlds.box(gs, Vector3(0, -0.28, 2.04), Vector3(4.4, 0.05, 0.04), acc * 0.8)
+	Worlds.box(gs, Vector3(0, -0.28, -2.04), Vector3(4.4, 0.05, 0.04), acc * 0.8)
+	Worlds.box(gs, Vector3(2.34, -0.28, 0), Vector3(0.04, 0.05, 3.8), acc * 0.8)
+	Worlds.box(gs, Vector3(-2.34, -0.28, 0), Vector3(0.04, 0.05, 3.8), acc * 0.8)
+	if w in ["lanterns", "cathedral", "mosaic"]:
+		Worlds.box(gs, Vector3(-2.0, 1.95, 1.7), Vector3(0.3, 0.4, 0.3), T.lights[0])
+	elif w == "sheesh":
+		for q in [Vector2(-1.9, 1.6), Vector2(1.9, 1.6)]:
+			Worlds.box(gs, Vector3(q.x, 1.5, q.y), Vector3(0.22, 0.22, 0.22), Color("ffd896"))
 	gs.set_material(Worlds.glow_mat)
 	gs.commit(m.mesh)
 	m.position = Vector3(x, y, -d)
 	decor(g, m)
+	# a soft dark patch on the ground far below: its shadow
+	var sh := MeshInstance3D.new()
+	var sq := QuadMesh.new()
+	sq.size = Vector2(6.0, 5.0)
+	sh.mesh = sq
+	sh.material_override = shadow_mat
+	sh.rotation.x = -PI * 0.5
+	sh.position = Vector3(x + 1.5, Worlds.SKY_GROUND + 0.25, -d + 1.0)
+	decor(g, sh)
 	var c0 := randi() % Glass.COLORS.size()
-	match randi() % 3:
+	match randi() % 6:
 		0:
 			# a glass house: three panes side by side
 			for i in 3:
@@ -650,12 +787,39 @@ func _island(d: float) -> void:
 			for i in 4:
 				var yy := y + 0.05 + i * 0.85
 				_bonus_pane(g, Glass.rect(x - 0.6, x + 0.6, yy, yy + 0.8), d, c0 if i % 2 == 0 else -1)
-		_:
+		2:
 			# crystals
 			for i in 3:
 				var r: float = [0.9, 0.65, 0.5][i]
 				var cx: float = x + [0.0, -1.3, 1.3][i]
 				_bonus_pane(g, Glass.ngon(6, r, Vector2(cx, y + r + 0.05), PI / 6.0), d + i * 0.4, c0)
+		3:
+			# a glass arch, and a smaller one behind it
+			_bonus_pane(g, Glass.arch(x - 1.4, x + 1.4, y, y + 1.6, 6), d + 0.8, -1)
+			_bonus_pane(g, Glass.arch(x - 0.9, x + 0.9, y, y + 1.2, 6), d - 0.6, c0)
+		4:
+			# a little windmill of glass, turning
+			var hub := Vector2(x, y + 1.9)
+			var blade := PackedVector2Array([Vector2(0.15, -0.16), Vector2(1.5, -0.1), Vector2(1.6, 0.0), Vector2(1.5, 0.1), Vector2(0.15, 0.16)])
+			var wsp := randf_range(1.0, 1.6) * sd
+			for i in 3:
+				var p := _bonus_pane(g, Glass.moved(blade, hub), d, -1)
+				var off := TAU * i / 3.0
+				p.move = func(pp: GPane, tt: float, _a: float): spin_about(pp, hub, off + tt * wsp)
+		_:
+			# a glass roof on four posts: easiest to hit from above
+			var roof := _bonus_pane(g, Glass.rect(-1.7, 1.7, 0.0, 3.0), d, -1, 20)
+			roof.node.transform = Transform3D(Basis(Vector3(1, 0, 0), -PI * 0.5), Vector3(x, y + 1.9, -d))
+			roof.base = roof.node.transform
+			var ps := SurfaceTool.new()
+			ps.begin(Mesh.PRIMITIVE_TRIANGLES)
+			for q in [Vector2(-1.6, 1.4), Vector2(1.6, 1.4), Vector2(-1.6, -1.4), Vector2(1.6, -1.4)]:
+				Worlds.box(ps, Vector3(q.x, 0.95, q.y), Vector3(0.1, 1.9, 0.1), Color("4a525c"))
+			ps.set_material(Worlds.lit_mat)
+			var pm := MeshInstance3D.new()
+			pm.mesh = ps.commit()
+			pm.position = Vector3(x, y, -d)
+			decor(g, pm)
 	if randf() < 0.4:
 		var tg := target("jar", Vector3(x + randf_range(-1.4, 1.4), y + 0.35, -(d - 1.3)), 0.55)
 		tg.on_hit = func(): _jar_got(tg)
@@ -712,6 +876,25 @@ func _spawn_in(a: float, b: float) -> void:
 	var dd := _door_d(r)
 	if dd >= a and dd < b and mode == "endless":
 		_door(dd)
+	if mode == "endless":
+		# the rooms made by hand: each the same every run (its own seed), none twice before the fiftieth
+		for rr: int in [r, r + 1]:
+			var rmx: int = rr / Rooms.COUNT
+			for e in Rooms.entries(rr):
+				var d: float = rr * ROOM_LEN + float(e[0])
+				if d < a or d >= b:
+					continue
+				seed(hash([rr % Rooms.COUNT, e[0], rmx]))
+				remix = rmx
+				var hard: int = mini(6, int(e[2]) + rmx)
+				match e[1]:
+					"jars":
+						_jars(d)
+					"boss":
+						Obstacles.finale(self, d, Rooms.world_of(rr))
+					_:
+						Obstacles.build(self, e[1], d, hard)
+		return
 	while next_obs < b:
 		var d := next_obs
 		var rr := _room_of(d)
@@ -752,6 +935,8 @@ func new_gate(kind: String, d: float) -> GGate:
 	g.d = d
 	g.ph = randf() * TAU
 	g.side = 1 if randf() < 0.5 else -1
+	if remix % 2 == 1:
+		g.side = -g.side
 	gates.append(g)
 	return g
 
@@ -1018,6 +1203,9 @@ func _process(delta: float) -> void:
 		return
 	t += dt
 	var want := 7.0 + minf(_room_of(dist), 10) * 0.45
+	if mode == "endless":
+		var rn := _room_of(dist)
+		want = 7.0 + minf(rn % Rooms.COUNT, 49) * 0.1 + minf(rn / Rooms.COUNT, 3) * 1.0
 	if mode == "level1":
 		want = 6.5 + clampf(dist / Levels.L1_LEN, 0.0, 1.0) * 2.5
 	elif mode == "calm":
@@ -1038,6 +1226,15 @@ func _process(delta: float) -> void:
 	var w := _world_at(dist)
 	if w != world:
 		_set_world(w)
+	if mode == "endless" and _room_of(dist) != room:
+		room = _room_of(dist)
+		var k := room % Rooms.COUNT
+		var label := "%s · %d/10" % [Worlds.def(world).name, k % Rooms.PER_WORLD + 1]
+		if k % Rooms.PER_WORLD == Rooms.PER_WORLD - 1:
+			label = "%s · FINAL ROOM" % Worlds.def(world).name
+		if k == 0 and room >= Rooms.COUNT:
+			label = "REMIX %d" % (room / Rooms.COUNT)
+		hud.show_toast(label, Hud.ACCENT, 0.6)
 	var sn := section_at(dist + 2.0)
 	if sn != sec_now:
 		sec_now = sn
@@ -1090,6 +1287,7 @@ func _place_camera(dt: float) -> void:
 		cam_pitch = lerpf(cam_pitch, want_pitch, 1.0 - exp(-dt * 1.4))
 	cam.position = Vector3(sway, EYE + bob, -dist) + off
 	backdrop.position = Vector3(0, EYE, -dist - 215.0)
+	dust.position = cam.position + Vector3(0, 0, -16.0)
 	look_to["sky"] = 1.0 if section_at(dist + 12.0) == "sky" else 0.0
 	if dt <= 0.0 and not look_now.is_empty():
 		look_now["sky"] = look_to["sky"]

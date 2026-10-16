@@ -276,23 +276,34 @@ static func build(G, type: String, d: float, r: int) -> void:
 
 
 ## the end of a level: a great turning wheel of glass with a golden heart
-static func finale(G, d: float) -> void:
+# each world's great wheel: [inner ring, outer ring] colours, and the glass of the middle blades
+const BOSS := {
+	"cathedral": [[0, 4], [1, 2, 3, 0], "mid"],
+	"venice": [[3, 2], [3, 2, 3, 2], "mid"],
+	"lanterns": [[1, 0], [0, 1, 1, 0], "mid"],
+	"mosaic": [[3, 2], [3, 2, 1, 3], "thick"],
+	"sheesh": [[1, 4], [1, 1, 4, 1], "mirror"],
+}
+
+
+static func finale(G, d: float, style := "cathedral") -> void:
+	var B: Array = BOSS.get(style, BOSS.cathedral)
 	var g: GGate = G.new_gate("finale", d)
 	g.finale = true
 	var core: GPane = G.pane(g, Glass.ngon(12, 0.5, Vector2(0, EYE)), d, "thick", 1)
 	var rest := []
 	for i in 3:
-		var p: GPane = G.pane(g, Glass.moved(Glass.wedge(0.12, 1.0, PI / 6.0), Vector2(0, EYE)), d - 0.4, "mid", 3, false)
+		var p: GPane = G.pane(g, Glass.moved(Glass.wedge(0.12, 1.0, PI / 6.0), Vector2(0, EYE)), d - 0.4, B[2], 3 if B[2] != "mirror" else -1, false)
 		var off := TAU * i / 3.0
 		p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off + t * 1.2)
 		rest.append(p)
 	for i in 8:
-		var p: GPane = G.pane(g, Glass.moved(Glass.wedge(1.1, 1.65, PI / 8.0 - 0.03), Vector2(0, EYE)), d, "thin", [0, 4][i % 2], false)
+		var p: GPane = G.pane(g, Glass.moved(Glass.wedge(1.1, 1.65, PI / 8.0 - 0.03), Vector2(0, EYE)), d, "thin", B[0][i % 2], false)
 		var off := TAU * i / 8.0
 		p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off - t * 0.6)
 		rest.append(p)
 	for i in 12:
-		var p: GPane = G.pane(g, Glass.moved(Glass.wedge(1.75, 2.85, PI / 12.0 - 0.025), Vector2(0, EYE)), d + 0.05, "mid", [1, 2, 3, 0][i % 4], false)
+		var p: GPane = G.pane(g, Glass.moved(Glass.wedge(1.75, 2.85, PI / 12.0 - 0.025), Vector2(0, EYE)), d + 0.05, "mid", B[1][i % 4], false)
 		var off := TAU * i / 12.0
 		p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off + t * 0.35)
 		rest.append(p)

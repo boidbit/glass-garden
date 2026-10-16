@@ -7,10 +7,13 @@ You fly forward through halls of glass. Tap to throw marbles and break the glass
 ## Modes
 
 - **Level 1 · First Light** — a 90-second run through a stained-glass cathedral: the crypt tunnel, the great hall, out through the roof into the sky, and back in for a rose-window finale. Finishing it gives up to three stars (for accuracy and no crashes) and unlocks Endless.
-- **Endless** — rooms of 200 m that change world as you go: Cathedral, Venice (Murano), Lanterns, Mosaic and Sheesh Mahal, each with its own music. Doors between rooms are checkpoints.
+- **Endless** — 50 rooms made by hand, 200 m each, ten in each world: Cathedral, Venice (Murano), Lanterns, Mosaic and Sheesh Mahal, each with its own music, the tenth room of each with a great wheel of glass. No room comes twice in a run; after all 50 (10 km) they come again as a remix, faster and the other way round. Doors between rooms are checkpoints. The rooms are written in `tools/rooms.py`, which checks them and writes `scripts/rooms.gd`.
 - **Calm** — slower, with no penalties and unlimited marbles.
 
 ## The way
+
+Far off, each world has its own skyline (spires, bell towers and domes, pagodas, minarets, onion domes) behind layers of haze, and specks of dust drift past everywhere.
+
 
 Each world changes shape as you go: narrow round **tunnels**, wide **great halls** with bonus glass on racks at the sides, and the open **sky**, where the glass floats and falls from above, and little islands below carry bonus glass to break from the air. Bonus glass is never in your way; break all of an island or a rack for three marbles.
 

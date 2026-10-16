@@ -582,6 +582,15 @@ static func _tunnel(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) 
 		if k % 2 == 0:
 			arc_boxes(P.glow, c3 + Vector3(0, 0, zc - 1.0), T_R - 0.22, a0 + 0.05, a1 - 0.05, 22, 0.07, 0.1, acc)
 			P.n_glow += 22
+	# pipes along the walls, and small lamps on them
+	for sd in [-1.0, 1.0]:
+		var px: float = sd * (T_R - 0.75)
+		box(P.lit, Vector3(px, 1.3, z0 - SEG * 0.5), Vector3(0.14, 0.14, SEG), Color("2b3138"))
+		box(P.lit, Vector3(px * 0.97, 1.6, z0 - SEG * 0.5), Vector3(0.09, 0.09, SEG), Color("39424c"))
+		P.n_lit += 2
+		for k in 2:
+			box(P.glow, Vector3(px * 0.96, 1.95, z0 - k * 8.0 - 4.0), Vector3(0.12, 0.2, 0.3), acc)
+			P.n_glow += 1
 	# little bright bits set in the walls (mirror work, tiles)
 	var bits: Array = T.bits
 	if bits.size():
@@ -619,29 +628,217 @@ static func _hall(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) ->
 			P.n_glow += 1
 	box(P.lit, Vector3(0, 14.5, z0 - SEG * 0.5), Vector3(HALL_W * 2.0 + 2.0, 0.6, SEG), T.wall * 0.4)
 	P.n_lit += 1
+	# lamps hanging on long chains, and light slanting in from the windows
+	for sd in [-1.0, 1.0]:
+		var lx: float = sd * rng.randf_range(4.0, 6.5)
+		var lz := z0 - rng.randf_range(2.0, SEG - 2.0)
+		var drop := rng.randf_range(5.0, 7.5)
+		box(P.lit, Vector3(lx, 14.2 - drop * 0.5, lz), Vector3(0.04, drop, 0.04), Color("222222"))
+		box(P.glow, Vector3(lx, 14.2 - drop - 0.3, lz), Vector3(0.5, 0.6, 0.5), T.lights[0])
+		P.n_lit += 1
+		P.n_glow += 1
+		var wz := z0 - 4.0
+		quad(P.shaft, Vector3(sd * HALL_W, 10.0, wz - 0.8), Vector3(sd * HALL_W, 10.0, wz + 0.8), Vector3(sd * (HALL_W - 9.0), 0.02, wz + 2.6), Vector3(sd * (HALL_W - 9.0), 0.02, wz + 1.0), Color(T.lights[0], 0.12), Color(T.lights[0], 0.0))
+		P.n_shaft += 1
 
 
 ## open sky: the ground far below with its lights, and tall pillars rising from it to rush past
 static func _sky(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
 	var T: Dictionary = TUNE[w]
 	var acc: Color = DEFS[w].accent
-	box(P.lit, Vector3(0, SKY_GROUND, z0 - SEG * 0.5), Vector3(160.0, 0.4, SEG), T.ground)
+	var g: Color = T.ground
+	# the ground far below, wide enough that its edge is lost in the haze
+	box(P.lit, Vector3(0, SKY_GROUND, z0 - SEG * 0.5), Vector3(900.0, 0.4, SEG), g)
 	P.n_lit += 1
-	for i in 26:
+	match w:
+		"cathedral":
+			# a sleeping city: blocks of houses with lit windows
+			for i in 7:
+				var x := rng.randf_range(-90.0, 90.0)
+				if absf(x) < 8.0:
+					continue
+				var bw := rng.randf_range(4.0, 9.0)
+				var bh := rng.randf_range(2.0, 9.0)
+				box(P.lit, Vector3(x, SKY_GROUND + bh * 0.5, z0 - rng.randf_range(2.0, SEG - 2.0)), Vector3(bw, bh, rng.randf_range(4.0, 8.0)), g * 1.6)
+				P.n_lit += 1
+		"venice":
+			# the lagoon: long glints on the water, little islands of houses
+			for i in 10:
+				box(P.glow, Vector3(rng.randf_range(-100.0, 100.0), SKY_GROUND + 0.22, z0 - rng.randf_range(0.0, SEG)), Vector3(rng.randf_range(3.0, 10.0), 0.05, 0.25), Color("7fb8d8") * 0.6)
+				P.n_glow += 1
+			if rng.randf() < 0.5:
+				var x := rng.randf_range(20.0, 80.0) * (-1.0 if rng.randf() < 0.5 else 1.0)
+				for k in 4:
+					box(P.lit, Vector3(x + k * 4.5, SKY_GROUND + 2.5, z0 - SEG * 0.5), Vector3(4.2, rng.randf_range(3.0, 7.0), 6.0), Color("8a5a48"))
+				P.n_lit += 4
+		"lanterns":
+			# paper lanterns floating on black water
+			for i in 8:
+				var lc: Color = T.lights[rng.randi_range(0, T.lights.size() - 1)]
+				box(P.glow, Vector3(rng.randf_range(-60.0, 60.0), SKY_GROUND + 0.6, z0 - rng.randf_range(0.0, SEG)), Vector3(0.7, 0.9, 0.7), lc)
+				P.n_glow += 1
+		"mosaic":
+			# dunes, long and low
+			for i in 3:
+				var x := rng.randf_range(-120.0, 120.0)
+				box(P.lit, Vector3(x, SKY_GROUND + 1.0, z0 - SEG * 0.5), Vector3(rng.randf_range(30.0, 60.0), 2.0, SEG), g * 1.35)
+				P.n_lit += 1
+		"sheesh":
+			# a palace garden: rows of lamps and a long pool
+			box(P.glow, Vector3(0, SKY_GROUND + 0.22, z0 - SEG * 0.5), Vector3(6.0, 0.05, SEG), Color("2a4a6a"))
+			for sd in [-1.0, 1.0]:
+				for k in 2:
+					box(P.glow, Vector3(sd * (5.0 + k * 6.0), SKY_GROUND + 0.6, z0 - k * 8.0 - 4.0), Vector3(0.5, 1.0, 0.5), Color("ffd896"))
+			P.n_glow += 5
+	for i in 22:
 		var lc: Color = T.lights[i % T.lights.size()]
-		var x := rng.randf_range(-70.0, 70.0)
-		if absf(x) < 3.0:
-			x += 6.0 * signf(x + 0.01)
-		box(P.glow, Vector3(x, SKY_GROUND + 0.3, z0 - rng.randf_range(0.0, SEG)), Vector3(0.5, 0.3, 0.5), lc)
+		var x := rng.randf_range(-110.0, 110.0)
+		if absf(x) < 4.0:
+			x += 8.0 * signf(x + 0.01)
+		box(P.glow, Vector3(x, SKY_GROUND + 0.3, z0 - rng.randf_range(0.0, SEG)), Vector3(0.45, 0.3, 0.45), lc * 0.9)
 		P.n_glow += 1
+	# thin layers of mist between you and the ground
+	var mist: Color = T.sky_hor.lerp(Color(1, 1, 1), 0.25)
+	for y in [-11.0, -18.0]:
+		var a0 := rng.randf_range(0.05, 0.12)
+		var a1 := rng.randf_range(0.05, 0.12)
+		quad(P.shaft, Vector3(-160, y, z0), Vector3(160, y, z0), Vector3(160, y, z0 - SEG), Vector3(-160, y, z0 - SEG), Color(mist, a0), Color(mist, a1))
+		P.n_shaft += 1
+	# tall pillars rising from the ground, far out to the sides
 	for k in 2:
-		if rng.randf() < 0.6:
+		if rng.randf() < 0.55:
 			var sd := -1.0 if rng.randf() < 0.5 else 1.0
 			var x := sd * rng.randf_range(16.0, 40.0)
 			var top := rng.randf_range(-10.0, 6.0)
 			var zc := z0 - rng.randf_range(1.0, SEG - 1.0)
 			var wdt := rng.randf_range(1.2, 2.4)
 			box(P.lit, Vector3(x, (SKY_GROUND + top) * 0.5, zc), Vector3(wdt, top - SKY_GROUND, wdt), T.wall * rng.randf_range(0.8, 1.0))
-			box(P.glow, Vector3(x, top + 0.1, zc), Vector3(wdt + 0.2, 0.2, wdt + 0.2), acc)
-			P.n_lit += 1
+			box(P.lit, Vector3(x, top + 0.15, zc), Vector3(wdt + 0.5, 0.3, wdt + 0.5), T.wall2 * 0.7)
+			box(P.glow, Vector3(x, top + 0.34, zc), Vector3(wdt + 0.2, 0.08, wdt + 0.2), acc)
+			P.n_lit += 2
 			P.n_glow += 1
+
+
+# ---------- far away: the skyline of each world, drawn on the sky behind everything ----------
+static var _skylines := {}
+
+
+## shapes standing on the far ground: [polygon, layer (0 far and pale, 1 nearer and darker)], and little lit windows
+static func skyline(w: String) -> Dictionary:
+	if _skylines.has(w):
+		return _skylines[w]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(w) % 100000
+	var shapes := []
+	var lights := []
+	var base := -32.0
+	# low hills right across, far behind
+	var x := -420.0
+	while x < 420.0:
+		var wdt := rng.randf_range(60.0, 140.0)
+		var h := rng.randf_range(8.0, 22.0)
+		shapes.append([PackedVector2Array([Vector2(x - 20.0, base), Vector2(x + wdt * 0.5, base + h), Vector2(x + wdt + 20.0, base)]), 0])
+		x += wdt * 0.7
+	x = -400.0
+	while x < 400.0:
+		var gap := rng.randf_range(14.0, 34.0)
+		if absf(x) < 18.0:
+			x += gap
+			continue
+		var layer := 1 if rng.randf() < 0.55 else 0
+		var s := rng.randf_range(0.8, 1.4) * (1.0 if layer == 1 else 0.75)
+		match w:
+			"cathedral":
+				var bw := rng.randf_range(6.0, 12.0) * s
+				var bh := rng.randf_range(10.0, 22.0) * s
+				shapes.append([_rect(x, x + bw, base, base + bh), layer])
+				if rng.randf() < 0.6:
+					shapes.append([PackedVector2Array([Vector2(x, base + bh), Vector2(x + bw * 0.5, base + bh + bw * rng.randf_range(1.6, 3.2)), Vector2(x + bw, base + bh)]), layer])
+				for k in 3:
+					lights.append(Vector2(x + rng.randf_range(1.0, bw - 1.0), base + rng.randf_range(3.0, bh - 2.0)))
+			"venice":
+				if rng.randf() < 0.3:
+					# a bell tower
+					var tw := 3.2 * s
+					var th := rng.randf_range(26.0, 38.0) * s
+					shapes.append([_rect(x, x + tw, base, base + th), layer])
+					shapes.append([PackedVector2Array([Vector2(x - 0.4, base + th), Vector2(x + tw * 0.5, base + th + 6.0 * s), Vector2(x + tw + 0.4, base + th)]), layer])
+				elif rng.randf() < 0.4:
+					# a church with a dome
+					var cw := rng.randf_range(12.0, 18.0) * s
+					var ch := rng.randf_range(8.0, 12.0) * s
+					shapes.append([_rect(x, x + cw, base, base + ch), layer])
+					shapes.append([_dome(x + cw * 0.5, base + ch, cw * 0.32, 1.0), layer])
+				else:
+					var hw := rng.randf_range(8.0, 16.0) * s
+					var hh := rng.randf_range(6.0, 12.0) * s
+					shapes.append([_rect(x, x + hw, base, base + hh), layer])
+					for k in 3:
+						lights.append(Vector2(x + rng.randf_range(1.0, hw - 1.0), base + rng.randf_range(2.0, hh - 1.5)))
+			"lanterns":
+				if rng.randf() < 0.45:
+					# a pagoda: tiers getting smaller
+					var pw := rng.randf_range(10.0, 14.0) * s
+					var y := base
+					for t in 4:
+						var ww := pw * (1.0 - t * 0.18)
+						shapes.append([PackedVector2Array([Vector2(x + (pw - ww) * 0.5 - 1.5, y + 4.0 * s), Vector2(x + (pw + ww) * 0.5 + 1.5, y + 4.0 * s), Vector2(x + (pw + ww) * 0.5 - 0.5, y), Vector2(x + (pw - ww) * 0.5 + 0.5, y)]), layer])
+						lights.append(Vector2(x + pw * 0.5, y + 2.0 * s))
+						y += 5.0 * s
+					shapes.append([_rect(x + pw * 0.5 - 0.3, x + pw * 0.5 + 0.3, y, y + 5.0 * s), layer])
+				else:
+					# mountains
+					var mw := rng.randf_range(40.0, 70.0) * s
+					shapes.append([PackedVector2Array([Vector2(x, base), Vector2(x + mw * 0.45, base + mw * rng.randf_range(0.35, 0.6)), Vector2(x + mw, base)]), 0])
+			"mosaic":
+				if rng.randf() < 0.35:
+					# a minaret
+					var mw2 := 2.4 * s
+					var mh := rng.randf_range(28.0, 40.0) * s
+					shapes.append([_rect(x, x + mw2, base, base + mh), layer])
+					shapes.append([_rect(x - 0.8, x + mw2 + 0.8, base + mh * 0.75, base + mh * 0.75 + 1.0), layer])
+					shapes.append([_dome(x + mw2 * 0.5, base + mh, mw2 * 0.8, 1.4), layer])
+				else:
+					var dw := rng.randf_range(14.0, 22.0) * s
+					var dh := rng.randf_range(6.0, 10.0) * s
+					shapes.append([_rect(x, x + dw, base, base + dh), layer])
+					if rng.randf() < 0.6:
+						shapes.append([_dome(x + dw * 0.5, base + dh, dw * 0.3, 1.0), layer])
+					for k in 2:
+						lights.append(Vector2(x + rng.randf_range(1.0, dw - 1.0), base + rng.randf_range(2.0, dh - 1.0)))
+			"sheesh":
+				# a palace: walls with onion domes and little pavilions on top
+				var aw := rng.randf_range(18.0, 30.0) * s
+				var ah := rng.randf_range(8.0, 14.0) * s
+				shapes.append([_rect(x, x + aw, base, base + ah), layer])
+				shapes.append([_onion(x + aw * 0.5, base + ah, aw * 0.2), layer])
+				for sd in [0.12, 0.88]:
+					shapes.append([_rect(x + aw * sd - 1.2, x + aw * sd + 1.2, base + ah, base + ah + 4.0 * s), layer])
+					shapes.append([_onion(x + aw * sd, base + ah + 4.0 * s, 1.8 * s), layer])
+				for k in 4:
+					lights.append(Vector2(x + rng.randf_range(1.0, aw - 1.0), base + rng.randf_range(2.0, ah - 1.0)))
+		x += gap + 10.0
+	var out := {"shapes": shapes, "lights": lights}
+	_skylines[w] = out
+	return out
+
+
+static func _rect(x0: float, x1: float, y0: float, y1: float) -> PackedVector2Array:
+	return PackedVector2Array([Vector2(x0, y0), Vector2(x1, y0), Vector2(x1, y1), Vector2(x0, y1)])
+
+
+static func _dome(cx: float, y: float, r: float, tall: float) -> PackedVector2Array:
+	var p := PackedVector2Array()
+	for i in 9:
+		var a := PI * i / 8.0
+		p.append(Vector2(cx + cos(a) * r, y + sin(a) * r * tall))
+	return p
+
+
+## an onion dome: swelling out, then drawn up to a point
+static func _onion(cx: float, y: float, r: float) -> PackedVector2Array:
+	var p := PackedVector2Array()
+	var pts := [Vector2(-0.7, 0.0), Vector2(-1.0, 0.45), Vector2(-0.9, 0.9), Vector2(-0.55, 1.25), Vector2(-0.2, 1.55), Vector2(0.0, 1.95), Vector2(0.2, 1.55), Vector2(0.55, 1.25), Vector2(0.9, 0.9), Vector2(1.0, 0.45), Vector2(0.7, 0.0)]
+	for q in pts:
+		p.append(Vector2(cx + q.x * r, y + q.y * r))
+	return p

@@ -454,7 +454,7 @@ func _build_levels() -> Control:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(row)
 	row.add_child(_tile("Level 1", "First Light. Seventy-five seconds through a cathedral of stained glass.", "level1"))
-	row.add_child(_tile("Endless", "Five worlds of glass, faster and faster. Checkpoints every 200 m.", "endless"))
+	row.add_child(_tile("Endless", "50 rooms, five worlds, none twice in a run. Checkpoints every 200 m.", "endless"))
 	row.add_child(_tile("Calm", "No crashes, no counting. Just break glass to music.", "calm"))
 	var back := _button("Back", false, 260)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER

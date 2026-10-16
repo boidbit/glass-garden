@@ -42,6 +42,10 @@ static func mats() -> void:
 	glass_mat.roughness = 0.06
 	glass_mat.metallic = 0.15
 	glass_mat.metallic_specular = 0.9
+	# glass catches the light at its edges, the way real glass does seen at an angle
+	glass_mat.rim_enabled = true
+	glass_mat.rim = 0.35
+	glass_mat.rim_tint = 0.4
 	mirror_mat = StandardMaterial3D.new()
 	mirror_mat.vertex_color_use_as_albedo = true
 	mirror_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
