@@ -29,6 +29,9 @@ var score_label: Label
 var combo_label: Label
 var prog_fill: ColorRect
 var toast: Label
+var title_big: Label
+var title_small: Label
+var _title_tw: Tween
 var flash: ColorRect
 var menu: Control
 var levels: Control
@@ -313,6 +316,17 @@ func _build_hud() -> void:
 	toast.offset_top = -170
 	toast.modulate.a = 0.0
 	hud.add_child(toast)
+	# a room's name, large, as you come into it
+	title_small = _label("", f600, 26, INK, 6)
+	title_big = _label("", f800, 84, INK, 14)
+	for l in [title_small, title_big]:
+		l.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		l.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.modulate.a = 0.0
+		hud.add_child(l)
+	title_small.offset_top = 130
+	title_big.offset_top = 160
 
 
 func set_balls(n: int, multi: int, infinite := false) -> void:
@@ -351,6 +365,27 @@ func show_toast(text: String, col := INK, hold := 0.7) -> void:
 	_toast_tw.tween_property(toast, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_toast_tw.tween_interval(hold)
 	_toast_tw.tween_property(toast, "modulate:a", 0.0, 0.35)
+
+
+func show_title(big: String, small: String, col: Color) -> void:
+	title_big.text = big.to_upper()
+	title_small.text = small
+	title_big.add_theme_color_override("font_color", col)
+	if _title_tw:
+		_title_tw.kill()
+	title_big.modulate.a = 0.0
+	title_small.modulate.a = 0.0
+	title_big.scale = Vector2(1.15, 1.15)
+	title_big.pivot_offset = Vector2(title_big.size.x * 0.5, 40)
+	_title_tw = create_tween()
+	_title_tw.set_parallel(true)
+	_title_tw.tween_property(title_big, "modulate:a", 1.0, 0.25)
+	_title_tw.tween_property(title_big, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	_title_tw.tween_property(title_small, "modulate:a", 1.0, 0.25).set_delay(0.1)
+	_title_tw.chain().tween_interval(1.4)
+	_title_tw.chain().set_parallel(true)
+	_title_tw.tween_property(title_big, "modulate:a", 0.0, 0.5)
+	_title_tw.tween_property(title_small, "modulate:a", 0.0, 0.5)
 
 
 func flash_screen(col: Color, a := 0.45, dur := 0.4) -> void:

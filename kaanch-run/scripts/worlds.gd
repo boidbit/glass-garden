@@ -37,14 +37,88 @@ const T_C := Vector2(0, 3.0)   # the middle of a tunnel
 const T_R := 5.9               # and its radius
 const SKY_GROUND := -26.0
 
+# ten moods for each world, one for each of its rooms, so every room has its own light:
+# [name, colour of the walls, colour of the lamps, sky, ambient light, sun, sun strength, haze, sky above, horizon]
+const MOODS := {
+	"cathedral": [
+		["The Nave", "999999", "8c8c8c", "120d18", "4a3e52", "ffd9a8", 0.8, 0.024, "141a3c", "6a4460"],
+		["The Crypt", "6a7a8a", "5a6a80", "06080c", "2a3448", "9fb8ff", 0.5, 0.03, "0a1020", "2a3450"],
+		["Golden Hour", "c8a070", "d8b070", "2a1808", "7a5a3a", "ffc070", 1.1, 0.02, "3a2a50", "c07848"],
+		["Rose Light", "b07888", "c890a8", "1e0a14", "6a3a50", "ffa0c0", 0.9, 0.022, "2a1030", "8a4060"],
+		["Candlelight", "a07a50", "ffc070", "0c0604", "3a2818", "ffb060", 0.7, 0.03, "1a1008", "6a4020"],
+		["Blue Vigil", "6a80b0", "7a9ae0", "060a1a", "2a3a6a", "a0c0ff", 0.7, 0.024, "0a1440", "3a5a9a"],
+		["Ember Choir", "b06048", "ff7a50", "1a0604", "5a2418", "ff8a60", 0.9, 0.024, "2a0a10", "8a3020"],
+		["Pale Morning", "c0c4c8", "b0c0d0", "2a3038", "8a929a", "ffffff", 1.1, 0.016, "4a6a90", "b8c8d8"],
+		["Emerald Hall", "70a088", "70d0a0", "04140c", "2a5a44", "b0ffd0", 0.8, 0.024, "082a20", "2a7a5a"],
+		["The Rose Window", "c09060", "ffd070", "1a0e04", "6a4a28", "ffd890", 1.1, 0.02, "2a1a40", "b07040"],
+	],
+	"venice": [
+		["Grand Canal", "9a9eaa", "a0b0c0", "1d3550", "5a6e88", "ffc9a0", 0.75, 0.016, "10284a", "4a6a90"],
+		["Murano Fire", "c08060", "ff9050", "2a1008", "7a4a30", "ffa070", 1.0, 0.018, "3a1a20", "c06040"],
+		["Lagoon Noon", "c8ccd0", "c0d0e0", "5a8ab0", "a0b8c8", "ffffff", 1.3, 0.01, "3a7ab8", "a8d0e8"],
+		["Carnival", "b070a0", "e080c0", "200a24", "6a3a6a", "ff90d0", 0.9, 0.02, "2a0a3a", "7a3a7a"],
+		["Fog on the Water", "a0a8a8", "b0c0c0", "4a5a60", "8a9898", "e0e8e8", 0.8, 0.03, "5a6a70", "8a9a9a"],
+		["Gondola Night", "5a6a90", "8090d0", "060c1e", "2a3458", "a0b0ff", 0.55, 0.02, "040a24", "1c2a5a"],
+		["Gold Mosaic", "c0a060", "ffd070", "281a06", "7a6030", "ffd890", 1.1, 0.016, "3a2a1a", "b08a40"],
+		["The Glassblower", "c07040", "ff8030", "1a0804", "5a3018", "ff9040", 1.0, 0.02, "2a1408", "9a4a20"],
+		["Sea Green", "70a0a0", "70d0c8", "062420", "2a6060", "b0fff0", 0.8, 0.018, "0a3a3a", "3a8a80"],
+		["Lights of San Marco", "a090b0", "ffd8a0", "120a20", "4a3a5a", "ffd8a0", 0.9, 0.018, "1a1040", "6a4a7a"],
+	],
+	"lanterns": [
+		["Lantern Path", "9a9a9a", "b0b0b0", "05070f", "2a3050", "9fb2ff", 0.45, 0.026, "03050f", "1c1c44"],
+		["Red Gates", "c06050", "ff7050", "140404", "5a2020", "ffa080", 0.7, 0.024, "1a0408", "5a1a20"],
+		["Moon Garden", "8090b0", "a0b8e0", "081020", "3a4870", "d0e0ff", 0.8, 0.02, "0a1430", "3a4a80"],
+		["Festival", "c09050", "ffb050", "180c04", "6a4a24", "ffc070", 0.9, 0.022, "1a0c20", "7a4030"],
+		["Bamboo Mist", "90a890", "a0c8a0", "0c1a10", "4a6a50", "d0ffd0", 0.7, 0.03, "102018", "4a6a50"],
+		["Plum Night", "9a6a9a", "d090d0", "120614", "4a2a4a", "e0a0ff", 0.6, 0.024, "140820", "4a2050"],
+		["Snow Lanterns", "c0c8d0", "d0e0f0", "2a3040", "7a8898", "ffffff", 0.9, 0.026, "3a4a60", "9aaabb"],
+		["Fireflies", "70805a", "d0ff70", "060a04", "2a3a20", "c0ff80", 0.5, 0.026, "04080a", "1a2a20"],
+		["Temple Dawn", "b09080", "ffc0a0", "2a1a1a", "7a5a50", "ffc0a0", 0.9, 0.02, "2a2040", "b07a70"],
+		["The Dragon", "b04030", "ff6030", "100202", "4a1a10", "ff7040", 0.8, 0.024, "1a0404", "6a1a10"],
+	],
+	"mosaic": [
+		["Blue Court", "8098b8", "80c0e0", "0a1830", "3a5a7a", "d0e8ff", 0.85, 0.016, "10204a", "3a6aa0"],
+		["Desert Noon", "d0b090", "f0d0a0", "a07850", "d0b090", "fff0d0", 1.3, 0.01, "6a90c0", "f0c890"],
+		["Saffron", "c09040", "ffc040", "2a1804", "7a5a20", "ffc060", 1.0, 0.016, "3a2010", "b07020"],
+		["Courtyard Dusk", "a07080", "e090a0", "3a2030", "7a5a5a", "ffb37a", 0.8, 0.016, "22163c", "7a4058"],
+		["Teal Fountains", "60a8a8", "60e0d8", "04201e", "2a6a68", "b0fff8", 0.85, 0.016, "083030", "2a8a80"],
+		["Lamp Market", "b07850", "ffa050", "1a0a04", "5a3a20", "ffb060", 0.8, 0.02, "1a0a1a", "7a4030"],
+		["Indigo Night", "5a6aa0", "8090ff", "060820", "2a3060", "a0b0ff", 0.6, 0.02, "060a30", "2a3a80"],
+		["Rose Garden", "c08890", "ffa0b0", "2a1018", "7a4a50", "ffc0c8", 0.9, 0.016, "3a1a3a", "a05a70"],
+		["Sandstorm", "b09878", "d0b890", "5a4430", "9a8468", "ffe0b0", 0.9, 0.035, "7a6448", "b09878"],
+		["Star Tiles", "8a8aa0", "c0c0ff", "0a0a18", "3a3a58", "e0e0ff", 0.7, 0.018, "0a0a28", "3a3a6a"],
+	],
+	"sheesh": [
+		["Hall of Mirrors", "999999", "999999", "0c0306", "4a2228", "ffdca0", 0.7, 0.024, "0e0512", "4a1a2a"],
+		["Gold Leaf", "c0a050", "ffd060", "1a1004", "6a5020", "ffd890", 1.0, 0.02, "2a1a08", "8a6020"],
+		["Silver Moon", "a8b0c0", "d0e0ff", "0a0e18", "4a5068", "e8f0ff", 0.8, 0.02, "0c1428", "4a5a80"],
+		["Ruby Hall", "b04050", "ff6070", "180408", "5a1a24", "ff8090", 0.8, 0.024, "200410", "6a1a2a"],
+		["Thousand Candles", "b08050", "ffb050", "120804", "4a3018", "ffc070", 0.8, 0.026, "1a0c08", "6a3a18"],
+		["Peacock", "4a8a90", "50d0c0", "041414", "1a4a4a", "a0fff0", 0.8, 0.02, "041c24", "1a5a6a"],
+		["Marble Noon", "d0ccc4", "e0dcd0", "6a6458", "b0aa9a", "ffffff", 1.2, 0.014, "8aa0c0", "e0d8c8"],
+		["Sunset Durbar", "c07050", "ff9060", "2a0c06", "7a3a24", "ffa070", 1.0, 0.02, "2a0a24", "a04a30"],
+		["Emerald Jharokha", "60a070", "70e090", "041808", "2a5a30", "b0ffc0", 0.8, 0.02, "082010", "2a6a3a"],
+		["The Sheesh Mahal", "b0a080", "fff0c0", "100a06", "5a4a30", "fff0c8", 1.0, 0.02, "1a1020", "8a6a50"],
+	],
+}
+
+
+## the light of one room: the world's own, with that room's mood over it
+static func look(w: String, mood: int) -> Dictionary:
+	var D: Dictionary = DEFS[w]
+	var T: Dictionary = TUNE[w]
+	var m: Array = MOODS[w][posmod(mood, 10)]
+	return {"name": m[0], "tint": Color(m[1]), "gtint": Color(m[2]), "bg": Color(m[3]), "amb": Color(m[4]), "sun": Color(m[5]), "sun_e": m[6], "fog": m[7],
+		"sky_top": Color(m[8]), "sky_hor": Color(m[9]), "ground": T.ground, "rim": D.rim}
+
 const JEWELS := [Color("e8283c"), Color("ffb020"), Color("2fbf6a"), Color("2f6fe0"), Color("9a45d8"), Color("f06aa8"), Color("20c4c4")]
 
 static var lit_mat: StandardMaterial3D
 static var glow_mat: StandardMaterial3D
 static var shaft_mat: StandardMaterial3D
 static var tex_mats := {}
-static var _dim := 1.0
-static var _gdim := 1.0
+static var _tint := Color(0.6, 0.6, 0.6)
+static var _gtint := Color(0.6, 0.6, 0.6)
 
 
 static func mats() -> void:
@@ -136,7 +210,7 @@ static func tex_mat(w: String) -> StandardMaterial3D:
 	if w == "shoji":
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	m.albedo_color = Color(_gdim, _gdim, _gdim) if w == "shoji" else Color(_dim, _dim, _dim)
+	m.albedo_color = _gtint if w == "shoji" else _tint
 	tex_mats[w] = m
 	return m
 
@@ -236,7 +310,7 @@ class Parts:
 		shaft.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 
-static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor") -> Node3D:
+static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor", variant := 0) -> Node3D:
 	mats()
 	var P := Parts.new()
 	var rng := RandomNumberGenerator.new()
@@ -254,7 +328,85 @@ static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := 
 		_facade(P, z0, w, sec, prev)
 	if sec == "corridor":
 		_corridor(P, rng, z0, w)
+	if sec == "corridor" or sec == "hall":
+		_dress(P, rng, z0, w, variant, sec == "hall")
 	return _finish(P, w)
+
+
+## what makes each room of a world look like a place of its own
+static func _dress(P: Parts, rng: RandomNumberGenerator, z0: float, w: String, v: int, hall: bool) -> void:
+	var T: Dictionary = TUNE[w]
+	var acc: Color = DEFS[w].accent
+	var hw := HALL_W - 2.0 if hall else HALF_W
+	var top := 13.0 if hall else CEIL
+	match v:
+		1:
+			# low arches across the way
+			for k in 4:
+				arc_boxes(P.lit, Vector3(0, top - hw - 0.3, z0 - k * 4.0 - 2.0), hw - 0.2, 0.05, PI - 0.05, 12, 0.22, 0.3, T.wall2 * 0.85)
+				P.n_lit += 12
+		2:
+			# a row of lamps hanging over the middle
+			for k in 2:
+				var lz := z0 - k * 8.0 - 4.0
+				box(P.lit, Vector3(0, top - 0.6, lz), Vector3(0.03, 1.2, 0.03), Color("222222"))
+				box(P.glow, Vector3(0, top - 1.35, lz), Vector3(0.7, 0.32, 0.7), T.lights[0])
+				box(P.lit, Vector3(0, top - 1.1, lz), Vector3(0.9, 0.12, 0.9), Color("3a3028"))
+				P.n_lit += 2
+				P.n_glow += 1
+		3:
+			# lines of light along the floor
+			for sd in [-1.0, 1.0]:
+				box(P.glow, Vector3(sd * (hw - 0.6), 0.02, z0 - SEG * 0.5), Vector3(0.12, 0.03, SEG), acc)
+				P.n_glow += 1
+			for k in 8:
+				box(P.glow, Vector3(0, 0.02, z0 - k * 2.0 - 1.0), Vector3(0.5, 0.03, 0.06), acc * 0.7)
+				P.n_glow += 1
+		4:
+			# long banners on the walls
+			for sd in [-1.0, 1.0]:
+				for k in 2:
+					var bz := z0 - k * 8.0 - 2.0
+					var bc: Color = JEWELS[rng.randi_range(0, JEWELS.size() - 1)] * 0.8
+					box(P.lit, Vector3(sd * (hw - 0.15), top - 2.4, bz), Vector3(0.05, 3.6, 1.2), bc)
+					box(P.glow, Vector3(sd * (hw - 0.12), top - 0.5, bz), Vector3(0.06, 0.1, 1.4), acc)
+					P.n_lit += 1
+					P.n_glow += 1
+		5:
+			# crystals growing at the foot of the walls
+			for i in 10:
+				var sd := -1.0 if i % 2 == 0 else 1.0
+				var h := rng.randf_range(0.4, 1.4)
+				box(P.glow, Vector3(sd * (hw - rng.randf_range(0.2, 0.7)), h * 0.5, z0 - rng.randf_range(0.0, SEG)), Vector3(0.2, h, 0.2), Color("9fe8e0") * 0.8)
+				P.n_glow += 1
+		6:
+			# rings of light right round the way
+			for k in 2:
+				var rz := z0 - k * 8.0 - 4.0
+				arc_boxes(P.glow, Vector3(0, top * 0.5, rz), maxf(hw, top * 0.5) + 0.1, 0.0, TAU, 28, 0.1, 0.12, acc)
+				P.n_glow += 28
+		7:
+			# beams of light falling from above
+			for k in 2:
+				var x := rng.randf_range(-hw + 1.0, hw - 1.0)
+				var bz := z0 - k * 8.0 - rng.randf_range(2.0, 6.0)
+				quad(P.shaft, Vector3(x - 0.6, top, bz), Vector3(x + 0.6, top, bz), Vector3(x + 1.0, 0.02, bz), Vector3(x - 1.0, 0.02, bz), Color(T.lights[0], 0.18), Color(T.lights[0], 0.02))
+				P.n_shaft += 1
+		8:
+			# a dark pool down the middle, with the lights of the room in it
+			box(P.lit, Vector3(0, 0.01, z0 - SEG * 0.5), Vector3(2.2, 0.03, SEG), Color("0a0e14"))
+			P.n_lit += 1
+			for k in 6:
+				box(P.glow, Vector3(rng.randf_range(-0.9, 0.9), 0.03, z0 - rng.randf_range(0.0, SEG)), Vector3(rng.randf_range(0.2, 0.6), 0.01, 0.04), T.lights[0] * 0.6)
+				P.n_glow += 1
+		9:
+			# the last room: golden frames, one after another
+			for k in 2:
+				var fz := z0 - k * 8.0 - 4.0
+				box(P.glow, Vector3(0, top - 0.2, fz), Vector3(hw * 2.0, 0.12, 0.12), Color("ffd36b"))
+				box(P.glow, Vector3(-hw + 0.1, top * 0.5, fz), Vector3(0.12, top, 0.12), Color("ffd36b"))
+				box(P.glow, Vector3(hw - 0.1, top * 0.5, fz), Vector3(0.12, top, 0.12), Color("ffd36b"))
+				P.n_glow += 3
 
 
 static func _corridor(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
@@ -514,16 +666,16 @@ static func _sheesh(P: Parts, rng: RandomNumberGenerator, z0: float) -> void:
 
 # ---------- the other shapes of the way ----------
 ## how bright the world's own shapes are (the glass stays bright), set as you go from one world to the next
-static func set_dim(dim: float, gdim: float) -> void:
+static func set_tint(tint: Color, gtint: Color) -> void:
 	mats()
-	_dim = dim
-	_gdim = gdim
-	lit_mat.albedo_color = Color(dim, dim, dim)
-	glow_mat.albedo_color = Color(gdim, gdim, gdim)
-	shaft_mat.albedo_color = Color(gdim, gdim, gdim)
+	_tint = tint
+	_gtint = gtint
+	lit_mat.albedo_color = tint
+	glow_mat.albedo_color = gtint
+	shaft_mat.albedo_color = gtint
 	for k in tex_mats:
 		var m: StandardMaterial3D = tex_mats[k]
-		m.albedo_color = Color(dim, dim, dim) if k != "shoji" else Color(gdim, gdim, gdim)
+		m.albedo_color = tint if k != "shoji" else gtint
 
 
 ## where one shape of the way meets another: a wall across it, with an opening the size of the corridor

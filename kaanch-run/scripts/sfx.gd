@@ -104,6 +104,11 @@ func set_music(on: bool) -> void:
 
 
 ## where the beat is now, 0..1
+func set_pitch(p: float) -> void:
+	music.pitch_scale = p
+	music_old.pitch_scale = p
+
+
 func beat_phase(t: float) -> float:
 	var beat := 60.0 / _bpm
 	if music.playing:
@@ -212,6 +217,16 @@ func _heavy() -> PackedFloat32Array:
 
 func _build_all() -> void:
 	streams["heavy"] = _wav(_heavy())
+	# into a new room: a rush of air and a bright chord
+	var rm := _buf(1.4)
+	var lpv := 0.0
+	for i in rm.size():
+		var t := float(i) / RATE
+		lpv += ((randf() * 2.0 - 1.0) - lpv) * (0.03 + 0.25 * minf(1.0, t / 0.5))
+		rm[i] = lpv * 0.5 * sin(PI * minf(1.0, t / 0.9))
+	for f in [523.25, 659.25, 783.99, 1046.5, 1318.5]:
+		_ping(rm, 0.45, f, 0.12, 2.5, 0.95)
+	streams["room"] = _wav(rm)
 	# a marble knocking on thick glass that holds
 	var th := _buf(0.35)
 	_noise(th, 0.0, 0.06, 0.6, 60.0, 0.2)

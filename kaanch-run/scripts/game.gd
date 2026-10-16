@@ -68,6 +68,7 @@ var level_i := 0
 var last_kind := ""
 var look_now := {}
 var cam_pitch := -2.5
+var mood := -1
 var backdrop: MeshInstance3D
 var shadow_mat: StandardMaterial3D
 var dust: CPUParticles3D
@@ -556,19 +557,34 @@ func _door_d(r: int) -> float:
 	return (r + 1) * ROOM_LEN - 6.0
 
 
+## which of the world's ten moods: in the endless run each room has its own
+func _mood_at(d: float) -> int:
+	var r := _room_of(d + 6.0)
+	if mode == "endless":
+		return r % Rooms.PER_WORLD
+	if mode == "calm":
+		return (r / 5) % 10
+	return 0
+
+
 func _set_world(w: String, now := false) -> void:
-	if w == world:
+	var m := _mood_at(dist)
+	if w == world and m == mood:
 		return
+	var new_world := w != world
 	world = w
-	var D: Dictionary = Worlds.def(w)
-	var T: Dictionary = Worlds.TUNE[w]
+	mood = m
+	var L: Dictionary = Worlds.look(w, m)
 	var sky_k: float = look_to.get("sky", 0.0)
-	look_to = {"bg": D.bg, "amb": D.amb, "sun": D.sun, "rim": D.rim, "sun_e": D.sun_e, "fog": D.fog, "dim": D.dim, "gdim": D.gdim, "sky": sky_k, "sky_top": T.sky_top, "sky_hor": T.sky_hor, "ground": T.ground}
+	look_to = {"bg": L.bg, "amb": L.amb, "sun": L.sun, "rim": L.rim, "sun_e": L.sun_e, "fog": L.fog, "tint": L.tint, "gtint": L.gtint, "sky": sky_k, "sky_top": L.sky_top, "sky_hor": L.sky_hor, "ground": L.ground}
 	if now or look_now.is_empty():
 		look_now = look_to.duplicate()
 	_apply_look()
 	if mode != "menu":
-		sfx.play_music("calm" if mode == "calm" else w)
+		if new_world:
+			sfx.play_music("calm" if mode == "calm" else w)
+		# each room plays its world's music in a key of its own
+		sfx.set_pitch([1.0, 0.944, 1.0595, 1.0, 1.122, 0.891, 1.0595, 1.0, 0.944, 1.0][m])
 
 
 func _apply_look() -> void:
@@ -623,7 +639,9 @@ func _apply_look() -> void:
 	sun.light_color = look_now.sun
 	sun.light_energy = look_now.sun_e
 	Glass.rim_mat.albedo_color = look_now.rim
-	Worlds.set_dim(look_now.dim, look_now.gdim)
+	Worlds.set_tint(look_now.tint, look_now.gtint)
+	# glass edges dark against a bright room, bright against a dark one
+	Glass.rim_mat.albedo_color = Color("eef6f4") if hor.get_luminance() < 0.4 else Color("1c4a50")
 
 
 func _look_step(dt: float) -> void:
@@ -648,7 +666,7 @@ func _stream() -> void:
 		var d0 := next_seg * SEG
 		var sec := section_at(d0 + 1.0)
 		var prev := section_at(d0 - 1.0) if d0 >= SEG else "corridor"
-		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev)
+		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev, _mood_at(d0 + 2.0))
 		root3d.add_child(seg)
 		segs.append({"node": seg, "d": d0})
 		if mode == "endless":
@@ -1224,17 +1242,22 @@ func _process(delta: float) -> void:
 	_place_camera(dt)
 	_look_step(dt)
 	var w := _world_at(dist)
-	if w != world:
+	if w != world or _mood_at(dist) != mood:
 		_set_world(w)
 	if mode == "endless" and _room_of(dist) != room:
 		room = _room_of(dist)
 		var k := room % Rooms.COUNT
-		var label := "%s · %d/10" % [Worlds.def(world).name, k % Rooms.PER_WORLD + 1]
+		var wn: String = Worlds.def(Rooms.world_of(room)).name
+		var small := "%s · ROOM %d OF 10" % [wn.to_upper(), k % Rooms.PER_WORLD + 1]
 		if k % Rooms.PER_WORLD == Rooms.PER_WORLD - 1:
-			label = "%s · FINAL ROOM" % Worlds.def(world).name
-		if k == 0 and room >= Rooms.COUNT:
-			label = "REMIX %d" % (room / Rooms.COUNT)
-		hud.show_toast(label, Hud.ACCENT, 0.6)
+			small = "%s · FINAL ROOM" % wn.to_upper()
+		if room >= Rooms.COUNT:
+			small += "  ·  REMIX %d" % (room / Rooms.COUNT)
+		var L: Dictionary = Worlds.look(Rooms.world_of(room), k % Rooms.PER_WORLD)
+		hud.show_title(L.name, small, (L.sun as Color).lerp(Color.WHITE, 0.3))
+		hud.flash_screen((L.sun as Color), 0.35, 0.7)
+		sfx.play("room", -2.0)
+		vibe(25)
 	var sn := section_at(dist + 2.0)
 	if sn != sec_now:
 		sec_now = sn
@@ -1406,8 +1429,10 @@ func _checkpoint(g: GGate) -> void:
 		cp_room = r
 		save.cp = r
 		_save()
-	hud.show_toast("CHECKPOINT", Hud.ACCENT, 0.8)
-	hud.flash_screen(Color.WHITE, 0.35, 0.6)
+	# in the endless run the next room's name says it (see _process)
+	if mode != "endless":
+		hud.show_toast("CHECKPOINT", Hud.ACCENT, 0.8)
+		hud.flash_screen(Color.WHITE, 0.35, 0.6)
 	sfx.play("checkpoint", -2.0)
 
 
