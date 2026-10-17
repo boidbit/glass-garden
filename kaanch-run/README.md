@@ -12,6 +12,8 @@ You fly forward through halls of glass. Tap to throw heavy iron balls and break 
 
 ## The way
 
+The way is wide. No glass floats: every pane sits in a metal frame and stands in a slot in the floor, on posts, hangs on a rod from a rail overhead, or turns on an axle held from above. Rooms differ in their shape, not just their light: platforms with steps along the walls, square pillars, great blocks hanging from the roof, channels in the floor, and rooms open to the sky with a colonnade either side and beams overhead. Crystals stand on stands.
+
 Far off, each world has its own skyline (spires, bell towers and domes, pagodas, minarets, onion domes) behind layers of haze, and specks of dust drift past everywhere.
 
 

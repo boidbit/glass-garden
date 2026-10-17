@@ -292,13 +292,13 @@ func _make_scene() -> void:
 	cyl.radial_segments = 14
 	jar_mesh = cyl
 	jar_mat = StandardMaterial3D.new()
-	jar_mat.albedo_color = Color(0.75, 0.95, 1.0, 0.75)
+	jar_mat.albedo_color = Color(0.45, 0.78, 1.0, 0.82)
 	jar_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	jar_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	jar_mat.roughness = 0.05
 	jar_mat.metallic = 0.2
 	jar_mat.emission_enabled = true
-	jar_mat.emission = Color("9fe8ff")
+	jar_mat.emission = Color("6fc8ff")
 	jar_mat.emission_energy_multiplier = 1.4
 	hub_mat = StandardMaterial3D.new()
 	hub_mat.albedo_color = Color(1.0, 0.86, 0.45, 0.9)
@@ -368,25 +368,33 @@ func _swirl_texture() -> Texture2D:
 
 ## a crystal to shoot: two pyramids, point to point
 func _crystal_shape() -> ArrayMesh:
+	# a tall four-sided pyramid of blue glass, standing on its base
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var r := 0.32
-	var h := 0.5
+	var r := 0.36
+	var tip := Vector3(0, 0.75, 0)
+	var y0 := -0.45
 	var ring := []
-	for i in 6:
-		var a := TAU * i / 6.0
-		ring.append(Vector3(cos(a) * r, 0, sin(a) * r))
-	for i in 6:
+	for i in 4:
+		var a := TAU * i / 4.0 + PI * 0.25
+		ring.append(Vector3(cos(a) * r, y0, sin(a) * r))
+	for i in 4:
 		var p0: Vector3 = ring[i]
-		var p1: Vector3 = ring[(i + 1) % 6]
-		for tip in [Vector3(0, h, 0), Vector3(0, -h * 0.8, 0)]:
-			var nrm := (p1 - p0).cross(tip - p0).normalized()
-			if nrm.dot(p0 + p1 + tip) < 0.0:
-				nrm = -nrm
-			st.set_normal(nrm)
-			st.add_vertex(p0)
-			st.add_vertex(tip)
-			st.add_vertex(p1)
+		var p1: Vector3 = ring[(i + 1) % 4]
+		var nrm := (p1 - p0).cross(tip - p0).normalized()
+		if nrm.dot(p0 + p1 + tip - Vector3(0, y0 * 3.0, 0)) < 0.0:
+			nrm = -nrm
+		st.set_normal(nrm)
+		st.add_vertex(p0)
+		st.add_vertex(tip)
+		st.add_vertex(p1)
+	st.set_normal(Vector3.DOWN)
+	st.add_vertex(ring[0])
+	st.add_vertex(ring[1])
+	st.add_vertex(ring[2])
+	st.add_vertex(ring[0])
+	st.add_vertex(ring[2])
+	st.add_vertex(ring[3])
 	return st.commit()
 
 
@@ -992,6 +1000,7 @@ func rng_color(_p: float) -> int:
 
 ## turn a pane about a point in the plane across the way
 func spin_about(p: GPane, pivot: Vector2, ang: float) -> void:
+	p.pivot = pivot
 	var b := Basis(Vector3(0, 0, 1), ang)
 	var z := p.base.origin.z
 	var o := p.base.origin - Vector3(pivot.x, pivot.y, z)
@@ -1050,11 +1059,28 @@ func target(kind: String, pos: Vector3, radius: float, g = null, color_id := -1)
 
 
 func _jars(d: float) -> void:
+	# crystals stand on stands at the side of the way (in the open sky the islands carry them)
+	if section_at(d) == "sky":
+		return
+	var g := new_gate("crystal", d)
 	var n := 1 + (randi() % 2)
-	var x0 := randf_range(-2.6, 2.6)
-	var y0 := randf_range(0.9, 4.0)
+	var sd := -1.0 if randf() < 0.5 else 1.0
 	for i in n:
-		var tg := target("jar", Vector3(clampf(x0 + i * 0.9 * signf(-x0 + 0.01), -3.6, 3.6), y0 + sin(i) * 0.3, -(d + i * 1.4)), 0.5)
+		var side := sd if i == 0 else -sd
+		var x := side * randf_range(2.6, HALF_W - 1.0)
+		var h := randf_range(0.5, 1.6)
+		var dz := d + i * 2.0
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		Worlds.box(st, Vector3(0, h * 0.5, 0), Vector3(1.1, h, 1.1), Color("b8c0c8"))
+		Worlds.box(st, Vector3(0, h + 0.03, 0), Vector3(1.2, 0.06, 1.2), Color("dfe5ea"))
+		st.set_material(Worlds.lit_mat)
+		var m := MeshInstance3D.new()
+		m.mesh = st.commit()
+		m.position = Vector3(x, 0, -dz)
+		decor(g, m)
+		var tg := target("jar", Vector3(x, h + 0.5, -dz), 0.6)
+		tg.spin = 0.0
 		tg.on_hit = func(): _jar_got(tg)
 
 
@@ -1299,7 +1325,8 @@ func _place_camera(dt: float) -> void:
 	cam.position = Vector3(sway, EYE + bob, -dist) + off
 	backdrop.position = Vector3(0, EYE, -dist - 215.0)
 	dust.position = cam.position + Vector3(0, 0, -16.0)
-	look_to["sky"] = 1.0 if section_at(dist + 12.0) == "sky" else 0.0
+	var sa := section_at(dist + 12.0)
+	look_to["sky"] = 1.0 if sa == "sky" else (0.85 if sa == "corridor" and _mood_at(dist + 12.0) in Worlds.OPEN else 0.0)
 	if dt <= 0.0 and not look_now.is_empty():
 		look_now["sky"] = look_to["sky"]
 		_apply_look()
@@ -1904,6 +1931,112 @@ func link(list: Array) -> void:
 						if qq.alive:
 							break_pane(qq, Vector2.ZERO, Vector3(0, 0, -1), false, k > 1)
 						return false)
+
+
+# ---------- what holds the glass up ----------
+var frame_mat: StandardMaterial3D
+
+
+## nothing floats: every pane gets a frame, and then posts to the floor (if it stands), a rod up to a rail
+## (if it slides), or an axle and a strut (if it turns); glass that falls from the sky only has its frame
+func mount(n0: int, type: String) -> void:
+	if frame_mat == null:
+		frame_mat = StandardMaterial3D.new()
+		frame_mat.albedo_color = Color("c9d1d8")
+		frame_mat.metallic = 0.6
+		frame_mat.roughness = 0.35
+	var falling := type in ["drop", "fall_blocks", "tile_rain"]
+	for gi in range(n0, gates.size()):
+		var g: GGate = gates[gi]
+		var sec := section_at(g.d)
+		var top := CEIL
+		if sec == "hall":
+			top = 14.2
+		elif sec == "tunnel":
+			top = Worlds.T_C.y + Worlds.T_R - 0.4
+		var rail_done := false
+		for p: GPane in g.panes:
+			if p.move.is_valid():
+				p.move.call(p, 0.0, 300.0)
+			var b := Glass.bounds(p.poly)
+			var moving := p.move.is_valid() or p.charge >= 0.0
+			var fm := _frame_mesh(p)
+			if moving or not p.blocks:
+				p.node.add_child(fm)
+			else:
+				fm.transform = p.node.transform
+				decor(g, fm)
+			if falling or not p.blocks:
+				continue
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			var xf: Transform3D = p.node.transform
+			var z := xf.origin.z
+			if p.pivot != Vector2.INF:
+				# an axle at the middle it turns about, held from above
+				var pv := p.pivot
+				Worlds._box_xf(st, Transform3D(Basis(Vector3(1, 0, 0), PI * 0.5).scaled(Vector3(0.34, 0.3, 0.34)), Vector3(pv.x, pv.y, z + 0.18)), Color("8a939c"))
+				if sec != "sky" and pv.y < top - 0.2:
+					Worlds.box(st, Vector3(pv.x, (pv.y + top) * 0.5, z + 0.3), Vector3(0.12, top - pv.y, 0.12), Color("8a939c"))
+			elif moving:
+				# it hangs from a rail across the way, on a rod
+				var hx := xf.origin.x + b.get_center().x
+				var ytop := xf.origin.y + b.end.y
+				if sec != "sky" and ytop < top - 0.1:
+					var rod := MeshInstance3D.new()
+					var rs := SurfaceTool.new()
+					rs.begin(Mesh.PRIMITIVE_TRIANGLES)
+					Worlds.box(rs, Vector3(b.get_center().x, b.end.y + (top - ytop) * 0.5, 0), Vector3(0.09, top - ytop, 0.09), Color("8a939c"))
+					rod.mesh = rs.commit()
+					rod.material_override = frame_mat
+					p.node.add_child(rod)
+					if not rail_done:
+						rail_done = true
+						Worlds.box(st, Vector3(0, top - 0.05, z), Vector3(Worlds.HALF_W * 2.0 + 0.4, 0.16, 0.24), Color("8a939c"))
+			else:
+				# it stands: posts down to the floor from its lowest corners, or a plate under it in the sky
+				var low := xf.origin.y + b.position.y
+				if sec == "sky":
+					Worlds.box(st, Vector3(xf.origin.x + b.get_center().x, low - 0.2, z), Vector3(b.size.x + 0.4, 0.4, 1.2), Color("8a939c"))
+				elif low > 0.15:
+					for q in [b.position.x + 0.1, b.end.x - 0.1]:
+						Worlds.box(st, Vector3(xf.origin.x + q, low * 0.5, z), Vector3(0.1, low, 0.1), Color("8a939c"))
+				else:
+					# a slot in the floor it stands in
+					Worlds.box(st, Vector3(xf.origin.x + b.get_center().x, 0.04, z), Vector3(b.size.x + 0.2, 0.08, 0.3), Color("8a939c"))
+			var m := MeshInstance3D.new()
+			m.mesh = st.commit()
+			m.material_override = frame_mat
+			decor(g, m)
+
+
+## a thin metal frame round a pane, along each edge
+func _frame_mesh(p: GPane) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var t: float = Glass.KINDS[p.kind].t + 0.05
+	var w := 0.07 + minf(t, 1.0) * 0.04
+	var n := p.poly.size()
+	var c := Glass.centroid(p.poly)
+	for i in n:
+		var a: Vector2 = p.poly[i]
+		var bb: Vector2 = p.poly[(i + 1) % n]
+		var e := bb - a
+		var l := e.length()
+		if l < 0.05:
+			continue
+		var dir := e / l
+		var nrm := Vector2(-dir.y, dir.x)
+		if nrm.dot((a + bb) * 0.5 - c) < 0.0:
+			nrm = -nrm
+		var mid := (a + bb) * 0.5 + nrm * (w * 0.4)
+		var basis := Basis(Vector3(dir.x, dir.y, 0) * (l + w), Vector3(nrm.x, nrm.y, 0) * w, Vector3(0, 0, t))
+		Worlds._box_xf(st, Transform3D(basis, Vector3(mid.x, mid.y, 0)), Color("c9d1d8"))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = frame_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
 
 
 ## a heavy block landing: the ground shakes

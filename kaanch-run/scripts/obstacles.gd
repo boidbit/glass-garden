@@ -5,9 +5,9 @@ extends RefCounted
 
 const EYE := 2.2
 const W := 2.4      # half the width of a full pane
-const Y0 := 0.5
+const Y0 := 0.05
 const Y1 := 3.9
-const HALF := 4.4   # half the width of a door
+const HALF := 6.2   # half the width of a door
 
 # what unlocks when (by room in the endless run)
 const POOL := [
@@ -34,7 +34,14 @@ static func full(x0 := -W, x1 := W) -> PackedVector2Array:
 	return Glass.rect(x0, x1, Y0, Y1)
 
 
+## every obstacle, and then what holds its glass up (frames, rails, posts, axles)
 static func build(G, type: String, d: float, r: int) -> void:
+	var n0: int = G.gates.size()
+	_build(G, type, d, r)
+	G.mount(n0, type)
+
+
+static func _build(G, type: String, d: float, r: int) -> void:
 	# the prism worked by colour; with all glass one colour it is layers of glass instead
 	if type == "prism":
 		type = "layers"
@@ -219,7 +226,7 @@ static func build(G, type: String, d: float, r: int) -> void:
 		# ---- big glass ----
 		"giant":
 			# a cube of glass as wide as the way, two metres deep: two hits
-			G.pane(g, Glass.rect(-4.3, 4.3, 0.05, 6.1), d, "giant")
+			G.pane(g, Glass.rect(-HALF, HALF, 0.05, Worlds.CEIL - 0.3), d, "giant")
 		"slide_block":
 			# a block sliding from side to side: slip past it, or break it
 			var p: GPane = G.pane(g, Glass.rect(-1.5, 1.5, 0.2, 4.4), d, "block")
@@ -307,7 +314,7 @@ static func build(G, type: String, d: float, r: int) -> void:
 				_doors(G, gi, dz, modes[i], r)
 		"shutter_door":
 			# a shutter of glass coming down from above
-			var p: GPane = G.pane(g, Glass.rect(-HALF, HALF, 0.05, 6.2), d, "mid" if r < 4 else "thick")
+			var p: GPane = G.pane(g, Glass.rect(-HALF, HALF, 0.05, Worlds.CEIL - 0.2), d, "mid" if r < 4 else "thick")
 			p.move = func(pp: GPane, _t: float, ahead: float):
 				var k := clampf((ahead - 9.0) / 12.0, 0.0, 1.0)
 				pp.node.transform = pp.base.translated(Vector3(0, 6.3 * k, 0))
@@ -316,7 +323,7 @@ static func build(G, type: String, d: float, r: int) -> void:
 			# a heavy door: hit the button and it opens; or break it, which costs
 			var parts := []
 			for i in 2:
-				parts.append(G.pane(g, Glass.rect(-HALF, 0.0, 0.05, 6.2) if i == 0 else Glass.rect(0.0, HALF, 0.05, 6.2), d, "slab"))
+				parts.append(G.pane(g, Glass.rect(-HALF, 0.0, 0.05, Worlds.CEIL - 0.2) if i == 0 else Glass.rect(0.0, HALF, 0.05, Worlds.CEIL - 0.2), d, "slab"))
 			var open := [-1.0]
 			for i in 2:
 				var sd := -1.0 if i == 0 else 1.0
@@ -502,7 +509,7 @@ static func build(G, type: String, d: float, r: int) -> void:
 static func _doors(G, g: GGate, d: float, how: String, r: int) -> void:
 	for i in 2:
 		var sd := -1.0 if i == 0 else 1.0
-		var p: GPane = G.pane(g, Glass.rect(-HALF, 0.0, 0.05, 6.2) if i == 0 else Glass.rect(0.0, HALF, 0.05, 6.2), d, "mid" if r < 4 else "thick")
+		var p: GPane = G.pane(g, Glass.rect(-HALF, 0.0, 0.05, Worlds.CEIL - 0.2) if i == 0 else Glass.rect(0.0, HALF, 0.05, Worlds.CEIL - 0.2), d, "mid" if r < 4 else "thick")
 		p.move = func(pp: GPane, t: float, ahead: float):
 			var k := clampf((24.0 - ahead) / 12.0, 0.0, 1.0)
 			var open := 0.0
@@ -530,6 +537,12 @@ const BOSS := {
 
 
 static func finale(G, d: float, style := "cathedral") -> void:
+	var n0: int = G.gates.size()
+	_finale(G, d, style)
+	G.mount(n0, "finale")
+
+
+static func _finale(G, d: float, style := "cathedral") -> void:
 	var B: Array = BOSS.get(style, BOSS.cathedral)
 	var g: GGate = G.new_gate("finale", d)
 	g.finale = true

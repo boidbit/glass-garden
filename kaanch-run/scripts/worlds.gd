@@ -4,8 +4,8 @@
 class_name Worlds
 extends RefCounted
 
-const HALF_W := 4.6
-const CEIL := 6.4
+const HALF_W := 6.4
+const CEIL := 7.4
 const SEG := 16.0
 
 const LIST := ["cathedral", "venice", "lanterns", "mosaic", "sheesh"]
@@ -32,9 +32,11 @@ const SECT := {
 	"mosaic": [["hall", "tunnel"], ["hall", "sky"]],
 	"sheesh": [["tunnel", "hall"], ["hall", "sky"]],
 }
-const HALL_W := 15.0
-const T_C := Vector2(0, 3.0)   # the middle of a tunnel
-const T_R := 5.9               # and its radius
+const HALL_W := 18.0
+# rooms with no walls or roof, open to the sky and the far skyline
+const OPEN := [2, 5, 7]
+const T_C := Vector2(0, 3.4)   # the middle of a tunnel
+const T_R := 7.6               # and its radius
 const SKY_GROUND := -26.0
 
 # ten moods for each world, one for each of its rooms, so every room has its own light:
@@ -327,10 +329,51 @@ static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := 
 	if sec != prev:
 		_facade(P, z0, w, sec, prev)
 	if sec == "corridor":
-		_corridor(P, rng, z0, w)
+		if variant in OPEN:
+			_open(P, rng, z0, w, variant)
+		else:
+			_corridor(P, rng, z0, w)
 	if sec == "corridor" or sec == "hall":
 		_dress(P, rng, z0, w, variant, sec == "hall")
 	return _finish(P, w)
+
+
+## a room open to the sky: a floor on piers, a colonnade either side, beams across overhead, a low parapet
+static func _open(P: Parts, rng: RandomNumberGenerator, z0: float, w: String, v: int) -> void:
+	var T: Dictionary = TUNE[w]
+	var acc: Color = DEFS[w].accent
+	var stone: Color = T.wall2.lerp(Color("e4e8ec"), 0.5)
+	var fa: Color = T.floor_a.lerp(Color("e8ecef"), 0.45)
+	var fb: Color = T.floor_b.lerp(Color("cfd5da"), 0.45)
+	for xi in 4:
+		for zi in 8:
+			var x := -HALF_W + HALF_W * 0.25 + xi * HALF_W * 0.5
+			box(P.lit, Vector3(x, -0.15, z0 - zi * 2.0 - 1.0), Vector3(HALF_W * 0.5 - 0.04, 0.3, 1.96), (fa if (xi + zi) % 2 == 0 else fb) * rng.randf_range(0.97, 1.03))
+			P.n_lit += 1
+	# the deck the floor sits on, and piers going down out of sight
+	box(P.lit, Vector3(0, -0.9, z0 - SEG * 0.5), Vector3(HALF_W * 2.0 + 1.6, 1.2, SEG), stone * 0.7)
+	P.n_lit += 1
+	for sd in [-1.0, 1.0]:
+		box(P.lit, Vector3(sd * (HALF_W - 0.8), -12.0, z0 - SEG * 0.5), Vector3(1.6, 22.0, 2.4), stone * 0.55)
+		# a low parapet with a bright cap
+		box(P.lit, Vector3(sd * (HALF_W + 0.5), 0.5, z0 - SEG * 0.5), Vector3(0.5, 1.0, SEG), stone * 0.9)
+		box(P.glow, Vector3(sd * (HALF_W + 0.5), 1.02, z0 - SEG * 0.5), Vector3(0.52, 0.04, SEG), acc * 0.7)
+		P.n_lit += 2
+		P.n_glow += 1
+		for k in 4:
+			var zc := z0 - k * 4.0 - 2.0
+			if v == 7 and k % 2 == 1:
+				continue
+			box(P.lit, Vector3(sd * (HALF_W + 0.5), CEIL * 0.5 + 0.5, zc), Vector3(0.6, CEIL - 1.0, 0.6), stone)
+			box(P.lit, Vector3(sd * (HALF_W + 0.5), CEIL + 0.1, zc), Vector3(0.9, 0.3, 0.9), stone * 0.9)
+			P.n_lit += 2
+	# beams across overhead (the rails that sliding glass hangs from run along these)
+	for k in 4:
+		var zc := z0 - k * 4.0 - 2.0
+		if v == 7 and k % 2 == 1:
+			continue
+		box(P.lit, Vector3(0, CEIL + 0.3, zc), Vector3(HALF_W * 2.0 + 1.8, 0.4, 0.5), stone * 0.85)
+		P.n_lit += 1
 
 
 ## what makes each room of a world look like a place of its own
@@ -339,6 +382,44 @@ static func _dress(P: Parts, rng: RandomNumberGenerator, z0: float, w: String, v
 	var acc: Color = DEFS[w].accent
 	var hw := HALL_W - 2.0 if hall else HALF_W
 	var top := 13.0 if hall else CEIL
+	# the shape of the room itself
+	var stone: Color = T.wall2.lerp(Color("d8dde2"), 0.4)
+	match v:
+		1, 6:
+			# raised platforms along the walls, with steps up to them
+			for sd in [-1.0, 1.0]:
+				var pw := 1.4 if v == 1 else 2.0
+				var ph := 0.9 if v == 1 else 1.6
+				box(P.lit, Vector3(sd * (hw - pw * 0.5), ph * 0.5, z0 - SEG * 0.5), Vector3(pw, ph, SEG), stone * 0.9)
+				P.n_lit += 1
+				for k in 3:
+					var shh := ph * (k + 1) / 4.0
+					box(P.lit, Vector3(sd * (hw - pw - 0.3 - (2 - k) * 0.35), shh * 0.5, z0 - 4.0 - 8.0 * (1 if sd > 0 else 0)), Vector3(0.36, shh, 2.4), stone)
+					P.n_lit += 1
+		3:
+			# square pillars standing in from the walls
+			for sd in [-1.0, 1.0]:
+				for k in 2:
+					var zc := z0 - k * 8.0 - 3.0
+					box(P.lit, Vector3(sd * (hw - 1.3), top * 0.5, zc), Vector3(0.8, top, 0.8), stone)
+					box(P.lit, Vector3(sd * (hw - 1.3), 0.15, zc), Vector3(1.1, 0.3, 1.1), stone * 0.85)
+					P.n_lit += 2
+		4:
+			# great blocks hanging from the roof
+			for k in 2:
+				var sd := -1.0 if (k + int(z0)) % 2 == 0 else 1.0
+				var bz := z0 - k * 8.0 - rng.randf_range(2.0, 6.0)
+				var bh := rng.randf_range(1.4, 2.6)
+				box(P.lit, Vector3(sd * (hw - 1.8), top - bh * 0.5 - 0.3, bz), Vector3(2.6, bh, 2.6), stone * 0.8)
+				box(P.lit, Vector3(sd * (hw - 1.8), top - 0.15, bz), Vector3(0.2, 0.3, 0.2), Color("39424c"))
+				P.n_lit += 2
+		8:
+			# the floor drops away at the sides into dark channels
+			for sd in [-1.0, 1.0]:
+				box(P.lit, Vector3(sd * (hw - 0.9), 0.02, z0 - SEG * 0.5), Vector3(1.6, 0.04, SEG), Color("06080c"))
+				box(P.glow, Vector3(sd * (hw - 1.72), 0.04, z0 - SEG * 0.5), Vector3(0.05, 0.04, SEG), acc * 0.8)
+				P.n_lit += 1
+				P.n_glow += 1
 	match v:
 		1:
 			# low arches across the way
