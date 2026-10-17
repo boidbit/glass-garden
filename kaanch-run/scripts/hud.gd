@@ -304,15 +304,12 @@ func _build_hud() -> void:
 	combo_label = _label("", f800, 28, ACCENT, 8)
 	combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	right.add_child(combo_label)
-	var pb := Button.new()
-	pb.text = "II"
-	pb.focus_mode = Control.FOCUS_NONE
-	pb.add_theme_font_override("font", f800)
-	pb.add_theme_font_size_override("font_size", 26)
-	for st in ["normal", "hover", "pressed"]:
-		pb.add_theme_stylebox_override(st, _sb(Color(0.02, 0.03, 0.05, 0.42 if st == "normal" else 0.6), 40, Color(1, 1, 1, 0.12), 2, 0, 0))
-	pb.custom_minimum_size = Vector2(76, 76)
-	pb.position = Vector2(28, 26)
+	var pb := IconButton.new("pause", 70.0)
+	pb.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	pb.offset_left = -100
+	pb.offset_right = -30
+	pb.offset_top = 24
+	pb.offset_bottom = 94
 	pb.pressed.connect(func(): pause_pressed.emit())
 	hud.add_child(pb)
 	toast = _label("", f800, 72, INK, 12)
@@ -480,170 +477,363 @@ func popup(text: String, at: Vector2, col := ACCENT) -> void:
 
 
 # ---------- the main menu ----------
+# ---------- drawn icons and controls ----------
+## a round button with an icon drawn on it (no icon font needed)
+class IconButton extends Button:
+	var icon_kind := "play"
+	var big := false
+	var fill := Color(1, 1, 1, 0.14)
+	var ink := Color(1, 1, 1, 0.95)
+
+	func _init(kind: String, size_px: float, primary := false) -> void:
+		icon_kind = kind
+		big = primary
+		custom_minimum_size = Vector2(size_px, size_px)
+		focus_mode = Control.FOCUS_NONE
+		flat = true
+		if primary:
+			fill = Color(1, 1, 1, 0.96)
+			ink = Color("0b1a22")
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		button_down.connect(queue_redraw)
+		button_up.connect(queue_redraw)
+
+	func _draw() -> void:
+		var r := size.x * 0.5
+		var c := size * 0.5
+		var k := 0.92 if is_pressed() else 1.0
+		draw_circle(c, r * k, fill)
+		if not big:
+			draw_arc(c, r * k - 1.5, 0, TAU, 64, Color(1, 1, 1, 0.35), 2.0, true)
+		var s := r * 0.42 * k
+		match icon_kind:
+			"play":
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.55, -s * 0.8), c + Vector2(s * 0.85, 0), c + Vector2(-s * 0.55, s * 0.8)]), ink)
+			"pause":
+				draw_rect(Rect2(c + Vector2(-s * 0.55, -s * 0.7), Vector2(s * 0.35, s * 1.4)), ink)
+				draw_rect(Rect2(c + Vector2(s * 0.2, -s * 0.7), Vector2(s * 0.35, s * 1.4)), ink)
+			"retry":
+				draw_arc(c, s * 0.7, -PI * 0.15, PI * 1.45, 32, ink, s * 0.22, true)
+				var tip := c + Vector2(cos(-PI * 0.15), sin(-PI * 0.15)) * s * 0.7
+				draw_colored_polygon(PackedVector2Array([tip + Vector2(-s * 0.35, -s * 0.1), tip + Vector2(s * 0.3, -s * 0.15), tip + Vector2(0.0, s * 0.4)]), ink)
+			"home":
+				draw_colored_polygon(PackedVector2Array([c + Vector2(0, -s * 0.85), c + Vector2(s * 0.85, -s * 0.05), c + Vector2(-s * 0.85, -s * 0.05)]), ink)
+				draw_rect(Rect2(c + Vector2(-s * 0.55, -s * 0.1), Vector2(s * 1.1, s * 0.85)), ink)
+				draw_rect(Rect2(c + Vector2(-s * 0.15, s * 0.3), Vector2(s * 0.3, s * 0.45)), fill if fill.a > 0.5 else Color(0.1, 0.12, 0.15))
+			"gear":
+				for i in 8:
+					var a := TAU * i / 8.0
+					var d := Vector2(cos(a), sin(a))
+					var n := Vector2(-d.y, d.x)
+					draw_colored_polygon(PackedVector2Array([c + d * s * 0.55 - n * s * 0.16, c + d * s * 0.95 - n * s * 0.12, c + d * s * 0.95 + n * s * 0.12, c + d * s * 0.55 + n * s * 0.16]), ink)
+				draw_circle(c, s * 0.62, ink)
+				draw_circle(c, s * 0.26, fill if fill.a > 0.5 else Color(0.12, 0.14, 0.17))
+			"close":
+				draw_line(c + Vector2(-s, -s) * 0.6, c + Vector2(s, s) * 0.6, ink, s * 0.2, true)
+				draw_line(c + Vector2(s, -s) * 0.6, c + Vector2(-s, s) * 0.6, ink, s * 0.2, true)
+			"zen":
+				# a calm wave
+				var pts := PackedVector2Array()
+				for i in 25:
+					var x := -s + 2.0 * s * i / 24.0
+					pts.append(c + Vector2(x, sin(x / s * PI * 1.5) * s * 0.3))
+				draw_polyline(pts, ink, s * 0.2, true)
+			"flag":
+				draw_line(c + Vector2(-s * 0.55, s * 0.85), c + Vector2(-s * 0.55, -s * 0.85), ink, s * 0.16, true)
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.5, -s * 0.85), c + Vector2(s * 0.75, -s * 0.5), c + Vector2(-s * 0.5, -s * 0.12)]), ink)
+
+
+## an on/off switch, drawn
+class Switch extends Button:
+	var on := true
+	var _k := 1.0
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(96, 52)
+		focus_mode = Control.FOCUS_NONE
+		flat = true
+		pressed.connect(func():
+			on = not on
+			queue_redraw())
+
+	func _process(dt: float) -> void:
+		var want := 1.0 if on else 0.0
+		if absf(_k - want) > 0.001:
+			_k = move_toward(_k, want, dt * 6.0)
+			queue_redraw()
+
+	func _draw() -> void:
+		var h := size.y
+		var r := h * 0.5
+		var track := Color(1, 1, 1, 0.18).lerp(Color("5ff2dc"), _k)
+		draw_circle(Vector2(r, r), r, track)
+		draw_circle(Vector2(size.x - r, r), r, track)
+		draw_rect(Rect2(r, 0, size.x - 2.0 * r, h), track)
+		var kx := lerpf(r, size.x - r, _k)
+		draw_circle(Vector2(kx, r), r - 5.0, Color(1, 1, 1, 0.98))
+
+
+func _caption(text: String) -> Label:
+	var l := _label(text.to_upper(), f800, 17, Color(1, 1, 1, 0.75))
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_constant_override("outline_size", 0)
+	return l
+
+
+## a small round button with a caption under it
+func _icon_with_caption(kind: String, text: String, size_px := 92.0) -> Array:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	var b := IconButton.new(kind, size_px)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(b)
+	v.add_child(_caption(text))
+	return [v, b]
+
+
+func _wordmark(size: int) -> Control:
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", -int(size * 0.28))
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var t := _label("KAANCH", title_font, size, INK, 0)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_constant_override("outline_size", 0)
+	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
+	t.add_theme_constant_override("shadow_offset_y", 6)
+	v.add_child(t)
+	var r := _label("R  U  N", f800, int(size * 0.3), ACCENT, 0)
+	r.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(r)
+	return v
+
+
+func _fade_in(c: Control) -> void:
+	c.visible = true
+	c.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(c, "modulate:a", 1.0, 0.22)
+
+
+# ---------- the home screen ----------
+var best_label: Label
+var play_btn: IconButton
+var start_panel: Control
+var start_cp_btn: Button
+var start_cp_info: Label
+signal start_from(room: int)
+
+
 func _build_menu() -> Control:
 	var c := _screen()
-	_shade(c)
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	box.offset_left = 96
-	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.add_theme_constant_override("separation", 8)
-	c.add_child(box)
-	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 22)
-	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(name_row)
-	name_row.add_child(_label("KAANCH", title_font, 112, INK))
-	name_row.add_child(_label("RUN", title_font, 112, ACCENT))
-	box.add_child(_label("Break the glass. Keep moving.", f600, 30, Color(1, 1, 1, 0.82)))
-	_gap(box, 36)
-	var play := _button("Play", true, 380)
-	play.pressed.connect(func(): show_levels(opts))
-	box.add_child(play)
-	var set_b := _button("Settings", false, 380)
-	set_b.pressed.connect(func(): show_settings(menu))
-	box.add_child(set_b)
-	var ver := _label("v0.2", f600, 20, Color(1, 1, 1, 0.4))
-	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	ver.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	ver.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	ver.offset_right = -24
-	ver.offset_bottom = -16
-	c.add_child(ver)
+	# darker at the top and bottom, so the words read over the moving room
+	var shade := TextureRect.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(0.02, 0.03, 0.05, 0.75))
+	g.set_color(1, Color(0.02, 0.03, 0.05, 0.85))
+	g.add_point(0.45, Color(0.02, 0.03, 0.05, 0.12))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill_from = Vector2(0.5, 0.0)
+	gt.fill_to = Vector2(0.5, 1.0)
+	shade.texture = gt
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.stretch_mode = TextureRect.STRETCH_SCALE
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(shade)
+	var col := VBoxContainer.new()
+	col.set_anchors_preset(Control.PRESET_FULL_RECT)
+	col.offset_top = 40
+	col.offset_bottom = -34
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 0)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(col)
+	col.add_child(_wordmark(118))
+	_gap(col, 26)
+	play_btn = IconButton.new("play", 150.0, true)
+	play_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	play_btn.pivot_offset = Vector2(75, 75)
+	play_btn.pressed.connect(_on_play)
+	col.add_child(play_btn)
+	_gap(col, 14)
+	best_label = _label("", f800, 22, Color(1, 1, 1, 0.8))
+	best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(best_label)
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(spacer)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 56)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(row)
+	var lv := _icon_with_caption("flag", "First Light")
+	lv[1].pressed.connect(func(): play_mode.emit("level1"))
+	row.add_child(lv[0])
+	var zen := _icon_with_caption("zen", "Zen")
+	zen[1].pressed.connect(func(): play_mode.emit("calm"))
+	row.add_child(zen[0])
+	var st := _icon_with_caption("gear", "Settings")
+	st[1].pressed.connect(func(): show_settings(menu))
+	row.add_child(st[0])
+	# the play button breathes, gently
+	var tw := create_tween().set_loops()
+	tw.tween_property(play_btn, "scale", Vector2(1.05, 1.05), 1.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(play_btn, "scale", Vector2.ONE, 1.1).set_trans(Tween.TRANS_SINE)
+	start_panel = _build_start()
 	return c
 
 
-func _tile(title: String, sub: String, mode: String) -> Button:
-	var b := Button.new()
-	b.theme_type_variation = "Tile"
-	b.custom_minimum_size = Vector2(330, 300)
-	b.focus_mode = Control.FOCUS_NONE
-	var v := VBoxContainer.new()
-	v.set_anchors_preset(Control.PRESET_FULL_RECT)
-	v.offset_left = 26
-	v.offset_top = 24
-	v.offset_right = -26
-	v.offset_bottom = -24
-	v.add_theme_constant_override("separation", 8)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(v)
-	var t := _label(title, f800, 36)
-	v.add_child(t)
-	var s := _label(sub, f600, 22, Color(1, 1, 1, 0.75))
-	s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	s.custom_minimum_size = Vector2(270, 0)
-	v.add_child(s)
-	var fill := Control.new()
-	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(fill)
-	var info := _label("", f800, 30, GOLD)
-	v.add_child(info)
-	b.pressed.connect(func(): play_mode.emit(mode))
-	level_cards[mode] = {"button": b, "info": info, "sub": s}
-	return b
+func _on_play() -> void:
+	if int(opts.get("cp", 0)) > 0:
+		menu.visible = false
+		start_cp_info.text = "ROOM %d  ·  %.1f KM" % [int(opts.cp) + 1, int(opts.cp) * 0.2]
+		_fade_in(start_panel)
+	else:
+		start_from.emit(0)
+
+
+## where to start: the beginning, or the last door you reached
+func _build_start() -> Control:
+	var c := _card()
+	var box: VBoxContainer = c[1]
+	box.custom_minimum_size = Vector2(560, 0)
+	var t := _label("START FROM", f800, 26, Color(1, 1, 1, 0.7))
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(t)
+	_gap(box, 4)
+	var b0 := _button("The beginning", false, 460)
+	b0.custom_minimum_size = Vector2(460, 84)
+	b0.pressed.connect(func():
+		c[0].visible = false
+		start_from.emit(0))
+	box.add_child(b0)
+	start_cp_btn = _button("Last checkpoint", true, 460)
+	start_cp_btn.custom_minimum_size = Vector2(460, 84)
+	start_cp_btn.pressed.connect(func():
+		c[0].visible = false
+		start_from.emit(int(opts.get("cp", 0))))
+	box.add_child(start_cp_btn)
+	start_cp_info = _label("", f800, 18, ACCENT)
+	start_cp_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(start_cp_info)
+	_gap(box, 4)
+	var back := IconButton.new("close", 64.0)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	back.pressed.connect(func():
+		c[0].visible = false
+		_fade_in(menu))
+	box.add_child(back)
+	return c[0]
 
 
 func _build_levels() -> Control:
+	# (the home screen holds the modes now)
 	var c := _screen()
-	_shade(c, false)
-	var v := VBoxContainer.new()
-	v.set_anchors_preset(Control.PRESET_CENTER)
-	v.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	v.grow_vertical = Control.GROW_DIRECTION_BOTH
-	v.add_theme_constant_override("separation", 26)
-	c.add_child(v)
-	var head := _label("Choose a run", title_font, 54)
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(head)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 22)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(row)
-	row.add_child(_tile("Level 1", "First Light. Seventy-five seconds through a cathedral of stained glass.", "level1"))
-	row.add_child(_tile("Endless", "50 rooms, five worlds, none twice in a run. Checkpoints every 200 m.", "endless"))
-	row.add_child(_tile("Calm", "No crashes, no counting. Just break glass to music.", "calm"))
-	var back := _button("Back", false, 260)
-	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	back.pressed.connect(func(): show_menu(opts))
-	v.add_child(back)
 	return c
 
 
-func _seg(title: String, key: String, choices: Array) -> HBoxContainer:
+# ---------- settings ----------
+var switches := {}
+var quality_btns: Array = []
+var reset_btn: Button
+var _reset_armed := false
+
+
+func _setting_row(box: VBoxContainer, title: String, key: String) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	var l := _label(title, f600, 28)
-	l.custom_minimum_size = Vector2(220, 0)
+	row.add_theme_constant_override("separation", 20)
+	var l := _label(title, f600, 30)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(l)
-	var btns := []
-	for ch in choices:
-		var b := _button(ch[0], false, 150)
-		b.custom_minimum_size = Vector2(150, 64)
-		b.set_meta("v", ch[1])
-		btns.append(b)
-		row.add_child(b)
-	for b in btns:
-		b.pressed.connect(func():
-			opts[key] = b.get_meta("v")
-			setting_changed.emit(key, opts[key])
-			_paint_seg(btns, key)
-		)
-	row.set_meta("btns", btns)
-	row.set_meta("key", key)
-	return row
-
-
-func _paint_seg(btns: Array, key: String) -> void:
-	for b in btns:
-		b.theme_type_variation = "Primary" if opts.get(key) == b.get_meta("v") else ""
+	var sw := Switch.new()
+	sw.pressed.connect(func():
+		opts[key] = sw.on
+		setting_changed.emit(key, sw.on))
+	row.add_child(sw)
+	switches[key] = sw
+	box.add_child(row)
+	var line := ColorRect.new()
+	line.color = Color(1, 1, 1, 0.08)
+	line.custom_minimum_size = Vector2(0, 2)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(line)
 
 
 func _build_settings() -> Control:
-	var c := _screen()
-	var dim := ColorRect.new()
-	dim.color = Color(0.01, 0.015, 0.03, 0.6)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.add_child(center)
-	var card := PanelContainer.new()
-	card.theme_type_variation = "Card"
-	center.add_child(card)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
-	card.add_child(box)
-	var t := _label("Settings", f800, 52)
-	box.add_child(t)
-	var rows := [
-		_seg("Graphics", "quality", [["Light", 0], ["Rich", 1]]),
-		_seg("Sound", "sound", [["On", true], ["Off", false]]),
-		_seg("Music", "music", [["On", true], ["Off", false]]),
-		_seg("Vibration", "vibe", [["On", true], ["Off", false]]),
-	]
-	for r in rows:
-		box.add_child(r)
-	c.set_meta("rows", rows)
-	_gap(box, 6)
-	var done := _button("Done", true, 300)
-	done.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	done.pressed.connect(func():
-		c.visible = false
+	var c := _card()
+	var box: VBoxContainer = c[1]
+	box.custom_minimum_size = Vector2(620, 0)
+	box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var head := HBoxContainer.new()
+	var t := _label("Settings", f800, 46)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	var x := IconButton.new("close", 58.0)
+	x.pressed.connect(func():
+		c[0].visible = false
+		_reset_armed = false
 		if _settings_from:
-			_settings_from.visible = true
-	)
-	box.add_child(done)
-	return c
+			_fade_in(_settings_from))
+	head.add_child(x)
+	box.add_child(head)
+	_gap(box, 6)
+	_setting_row(box, "Music", "music")
+	_setting_row(box, "Sound", "sound")
+	_setting_row(box, "Vibration", "vibe")
+	var qrow := HBoxContainer.new()
+	qrow.add_theme_constant_override("separation", 10)
+	var ql := _label("Graphics", f600, 30)
+	ql.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ql.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	qrow.add_child(ql)
+	for q in [["Smooth", 0], ["Rich", 1]]:
+		var b := _button(q[0], false, 130)
+		b.custom_minimum_size = Vector2(130, 56)
+		b.add_theme_font_size_override("font_size", 22)
+		b.set_meta("v", q[1])
+		b.pressed.connect(func():
+			opts["quality"] = b.get_meta("v")
+			setting_changed.emit("quality", opts.quality)
+			_paint_quality())
+		quality_btns.append(b)
+		qrow.add_child(b)
+	box.add_child(qrow)
+	_gap(box, 14)
+	reset_btn = _button("Reset progress", false, 300)
+	reset_btn.custom_minimum_size = Vector2(300, 56)
+	reset_btn.add_theme_font_size_override("font_size", 22)
+	reset_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	reset_btn.pressed.connect(func():
+		if not _reset_armed:
+			_reset_armed = true
+			reset_btn.text = "Tap again to reset"
+		else:
+			_reset_armed = false
+			reset_btn.text = "Progress reset"
+			setting_changed.emit("reset", true))
+	box.add_child(reset_btn)
+	var ver := _label("KAANCH RUN  ·  VERSION 0.4", f800, 16, Color(1, 1, 1, 0.4))
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(ver)
+	c[0].set_meta("rows", [])
+	return c[0]
+
+
+func _paint_quality() -> void:
+	for b in quality_btns:
+		b.theme_type_variation = "Primary" if int(opts.get("quality", 1)) == int(b.get_meta("v")) else ""
 
 
 func _card() -> Array:
 	var wrap := _screen()
 	var dim := ColorRect.new()
-	dim.color = Color(0.01, 0.015, 0.03, 0.55)
+	dim.color = Color(0.01, 0.015, 0.03, 0.62)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wrap.add_child(dim)
@@ -661,120 +851,156 @@ func _card() -> Array:
 	return [wrap, box]
 
 
+## a bare screen with a dark veil, things set straight on it (no card)
+func _veil() -> Array:
+	var wrap := _screen()
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.015, 0.03, 0.66)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(dim)
+	var col := VBoxContainer.new()
+	col.set_anchors_preset(Control.PRESET_FULL_RECT)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 10)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wrap.add_child(col)
+	return [wrap, col]
+
+
+func _icon_row(col: VBoxContainer, items: Array) -> void:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 46)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(row)
+	for it in items:
+		var b := IconButton.new(it[0], it[1], it[2])
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.pressed.connect(it[3])
+		row.add_child(b)
+
+
+# ---------- pause ----------
 func _build_pause() -> Control:
-	var c := _card()
-	var box: VBoxContainer = c[1]
-	pause_title = _label("Paused", f800, 56)
+	var c := _veil()
+	var col: VBoxContainer = c[1]
+	pause_title = _label("PAUSED", title_font, 72)
 	pause_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(pause_title)
-	var r := _button("Resume", true)
-	r.pressed.connect(func(): resume_pressed.emit())
-	box.add_child(r)
-	var rs := _button("Restart")
-	rs.pressed.connect(func(): restart_pressed.emit())
-	box.add_child(rs)
-	var st := _button("Settings")
-	st.pressed.connect(func(): show_settings(pause_panel))
-	box.add_child(st)
-	var m := _button("Main menu")
-	m.pressed.connect(func(): menu_pressed.emit())
-	box.add_child(m)
+	col.add_child(pause_title)
+	_gap(col, 30)
+	_icon_row(col, [
+		["home", 96.0, false, func(): menu_pressed.emit()],
+		["play", 140.0, true, func(): resume_pressed.emit()],
+		["retry", 96.0, false, func(): restart_pressed.emit()],
+	])
+	_gap(col, 26)
+	var sg := IconButton.new("gear", 64.0)
+	sg.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	sg.pressed.connect(func(): show_settings(pause_panel))
+	col.add_child(sg)
 	return c[0]
 
 
+# ---------- the end of a run ----------
+var over_badge: Label
+
+
 func _build_over() -> Control:
-	var c := _card()
-	var box: VBoxContainer = c[1]
-	over_title = _label("Out of balls", f800, 44)
+	var c := _veil()
+	var col: VBoxContainer = c[1]
+	over_title = _label("RUN OVER", f800, 28, Color(1, 1, 1, 0.7))
 	over_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(over_title)
-	over_big = _label("0 m", title_font, 92, ACCENT)
+	col.add_child(over_title)
+	over_big = _label("0 m", title_font, 128, INK)
 	over_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(over_big)
-	over_sub = _label("", f600, 26, Color(1, 1, 1, 0.7))
+	col.add_child(over_big)
+	over_badge = _label("NEW BEST", f800, 26, GOLD)
+	over_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(over_badge)
+	over_sub = _label("", f800, 22, Color(1, 1, 1, 0.65))
 	over_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(over_sub)
-	_gap(box, 8)
-	cont_btn = _button("Continue", true, 400)
+	col.add_child(over_sub)
+	_gap(col, 26)
+	_icon_row(col, [
+		["home", 96.0, false, func(): menu_pressed.emit()],
+		["retry", 140.0, true, func(): restart_pressed.emit()],
+	])
+	_gap(col, 18)
+	cont_btn = _button("Continue from checkpoint", false, 460)
+	cont_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	cont_btn.pressed.connect(func(): continue_pressed.emit())
-	box.add_child(cont_btn)
-	var rs := _button("Try again", false, 400)
-	rs.pressed.connect(func(): restart_pressed.emit())
-	box.add_child(rs)
-	var m := _button("Main menu", false, 400)
-	m.pressed.connect(func(): menu_pressed.emit())
-	box.add_child(m)
+	col.add_child(cont_btn)
 	return c[0]
 
 
 func _build_done() -> Control:
-	var c := _card()
-	var box: VBoxContainer = c[1]
-	done_title = _label("Level complete", f800, 46)
+	var c := _veil()
+	var col: VBoxContainer = c[1]
+	done_title = _label("FIRST LIGHT", f800, 28, Color(1, 1, 1, 0.7))
 	done_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(done_title)
+	col.add_child(done_title)
+	var big := _label("COMPLETE", title_font, 96, INK)
+	big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(big)
 	var stars := HBoxContainer.new()
 	stars.alignment = BoxContainer.ALIGNMENT_CENTER
 	stars.add_theme_constant_override("separation", 18)
-	box.add_child(stars)
+	col.add_child(stars)
 	for i in 3:
-		var s := _label("★", f800, 84, Color(1, 1, 1, 0.15))
-		s.pivot_offset = Vector2(30, 50)
+		var s := _label("★", f800, 72, Color(1, 1, 1, 0.15))
+		s.pivot_offset = Vector2(26, 44)
 		stars.add_child(s)
 		done_stars.append(s)
-	done_rows = _label("", f600, 28, INK)
+	done_rows = _label("", f800, 22, Color(1, 1, 1, 0.65))
 	done_rows.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(done_rows)
-	done_unlock = _label("Endless unlocked!", f800, 28, GOLD)
-	done_unlock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(done_unlock)
-	_gap(box, 6)
-	var nx := _button("Endless run", true, 400)
-	nx.pressed.connect(func(): play_mode.emit("endless"))
-	box.add_child(nx)
-	var rs := _button("Play again", false, 400)
-	rs.pressed.connect(func(): restart_pressed.emit())
-	box.add_child(rs)
-	var m := _button("Main menu", false, 400)
-	m.pressed.connect(func(): menu_pressed.emit())
-	box.add_child(m)
+	col.add_child(done_rows)
+	done_unlock = _label("", f800, 20, GOLD)
+	done_unlock.visible = false
+	col.add_child(done_unlock)
+	_gap(col, 22)
+	_icon_row(col, [
+		["home", 96.0, false, func(): menu_pressed.emit()],
+		["play", 140.0, true, func(): play_mode.emit("endless")],
+		["retry", 96.0, false, func(): restart_pressed.emit()],
+	])
 	return c[0]
 
 
 # ---------- switching screens ----------
 func _hide_all() -> void:
-	for s in [menu, levels, settings, pause_panel, over_panel, done_panel]:
-		s.visible = false
+	for sc in [menu, levels, settings, pause_panel, over_panel, done_panel, start_panel]:
+		if sc:
+			sc.visible = false
 	hud.visible = false
 
 
 func apply_settings(save: Dictionary) -> void:
 	opts = save
-	var rows: Array = settings.get_meta("rows")
-	for r in rows:
-		_paint_seg(r.get_meta("btns"), r.get_meta("key"))
+	for k in switches:
+		var sw: Switch = switches[k]
+		sw.on = bool(save.get(k, true))
+		sw._k = 1.0 if sw.on else 0.0
+		sw.queue_redraw()
+	_paint_quality()
+	if reset_btn:
+		reset_btn.text = "Reset progress"
+
+
+func _km(m: int) -> String:
+	return ("%.2f km" % (m / 1000.0)) if m >= 1000 else ("%d m" % m)
 
 
 func show_menu(save: Dictionary) -> void:
 	opts = save
 	_hide_all()
-	menu.visible = true
+	var best := int(save.get("best", 0))
+	best_label.text = ("BEST  " + _km(best).to_upper()) if best > 0 else "TAP TO PLAY"
+	_fade_in(menu)
 
 
 func show_levels(save: Dictionary) -> void:
-	opts = save
-	_hide_all()
-	levels.visible = true
-	var l1: Dictionary = level_cards["level1"]
-	var st := int(save.get("l1_stars", 0))
-	l1.info.text = ("★".repeat(st) + "☆".repeat(3 - st)) if save.get("l1_done", false) else "New"
-	var en: Dictionary = level_cards["endless"]
-	var unlocked: bool = save.get("l1_done", false)
-	en.button.disabled = not unlocked
-	en.info.text = ("Best %d m" % int(save.get("best", 0))) if unlocked else "Finish Level 1 to unlock"
-	en.info.add_theme_font_size_override("font_size", 30 if unlocked else 22)
-	var calm: Dictionary = level_cards["calm"]
-	calm.info.text = "Relax"
+	show_menu(save)
 
 
 func show_settings(from: Control = null) -> void:
@@ -782,7 +1008,7 @@ func show_settings(from: Control = null) -> void:
 	if from:
 		from.visible = false
 	apply_settings(opts)
-	settings.visible = true
+	_fade_in(settings)
 
 
 func show_play(_mode: String) -> void:
@@ -792,35 +1018,34 @@ func show_play(_mode: String) -> void:
 
 
 func show_pause(mode: String) -> void:
-	pause_panel.visible = true
-	pause_title.text = "Paused"
+	_fade_in(pause_panel)
 
 
 func show_over_endless(d: int, best: int, cp: int, new_best: bool, score: int) -> void:
 	_hide_all()
-	over_panel.visible = true
-	over_title.text = "New best!" if new_best else "Out of balls"
-	over_big.text = "%d m" % d
-	over_sub.text = "Best %d m  ·  Score %d" % [best, score]
+	over_title.text = "RUN OVER"
+	over_big.text = _km(d)
+	over_badge.visible = new_best
+	over_sub.text = ("BEST  " + _km(best).to_upper()) if not new_best else ""
 	cont_btn.visible = cp > 0
-	cont_btn.text = "Continue from %d m" % cp
+	cont_btn.text = "Continue from room %d" % (cp / 200 + 1)
+	_fade_in(over_panel)
 
 
 func show_over_level(d: int, total: int, score: int) -> void:
 	_hide_all()
-	over_panel.visible = true
-	over_title.text = "Out of balls"
+	over_title.text = "FIRST LIGHT"
 	over_big.text = "%d%%" % int(100.0 * d / maxf(1.0, total))
-	over_sub.text = "of the level  ·  Score %d" % score
+	over_badge.visible = false
+	over_sub.text = "OF THE WAY THROUGH"
 	cont_btn.visible = false
+	_fade_in(over_panel)
 
 
 func show_done(s: Dictionary) -> void:
 	_hide_all()
-	done_panel.visible = true
-	done_title.text = "Level complete"
-	done_rows.text = "Score  %d%s\nGlass broken  %d\nAccuracy  %d%%\nBest combo  ×%d" % [s.score, ("   new best!" if s.best else ""), s.glass, int(s.acc * 100.0), s.combo]
-	done_unlock.visible = s.unlocked
+	done_rows.text = "ACCURACY %d%%   ·   GLASS %d" % [int(s.acc * 100.0), s.glass]
+	_fade_in(done_panel)
 	for i in 3:
 		var st := done_stars[i]
 		st.add_theme_color_override("font_color", Color(1, 1, 1, 0.15))

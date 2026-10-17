@@ -140,6 +140,7 @@ func _ready() -> void:
 	hud.menu_pressed.connect(_to_menu)
 	hud.pause_pressed.connect(_pause)
 	hud.setting_changed.connect(_on_setting)
+	hud.start_from.connect(func(r: int): _start("endless", r))
 	_apply_quality()
 	_reset("menu")
 	hud.show_menu(save)
@@ -166,6 +167,15 @@ func _save() -> void:
 
 
 func _on_setting(key: String, value) -> void:
+	if key == "reset":
+		save.best = 0
+		save.cp = 0
+		save.l1_done = false
+		save.l1_stars = 0
+		save.l1_score = 0
+		cp_room = 0
+		_save()
+		return
 	save[key] = value
 	match key:
 		"sound":
@@ -616,6 +626,9 @@ func _mood_at(d: float) -> int:
 		return r % Rooms.PER_WORLD
 	if mode == "calm":
 		return (r / 5) % 10
+	if mode == "menu":
+		# the title screen runs through a bright room open to the sky
+		return 7
 	return 0
 
 
