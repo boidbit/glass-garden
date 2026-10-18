@@ -25,6 +25,8 @@ All the glass is one colour of glass: thin (tinkles), mid, thick and slab (2 hit
 
 More glass: giant cubes of glass two metres deep, blocks that slide or come crashing down from above, long pendulum blades, scissor blades, round saw blades, diagonal blades and lines of turning blades; doors of glass that open by themselves (or stick, or slide shut), shutters, revolving and button doors; chessboards of thick and thin squares, falling tiles, a turning grid, tiles that slide out of the walls, a pane with a hole in it, rings of glass to fly through, half-thin half-thick panes, dominoes, and brick walls that come down in one. Each room of the endless run is built round one of these, and in some rooms the whole room turns about you.
 
+Big panes break where the ball strikes: a hole opens and the rest stays, cracked, so you aim at the place you will pass through. Glass is one misty blue-grey with fine scratches, and comes out of the haze close in front of you. Each room starts slow past its door and gets faster towards the next. A ring round the ball count shows how near the next extra ball per throw is; balls in circles down the left show how many each throw sends.
+
 The ball is a ball of iron, about the size of a marble in your hand: it flies in a gentle curve, breaks thin glass and goes on, and knocks back off glass that holds; it never goes through glass.
 
 ## Build

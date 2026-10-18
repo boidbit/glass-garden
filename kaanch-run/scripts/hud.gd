@@ -33,6 +33,8 @@ var icon: TextureRect
 var crack_rect: TextureRect
 var _crack_tw: Tween
 var _pulse := 0.0
+var ring: Ring
+var dots: MultiDots
 var title_big: Label
 var title_small: Label
 var _title_tw: Tween
@@ -279,6 +281,14 @@ func _build_hud() -> void:
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(icon)
+	ring = Ring.new()
+	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ring.offset_left = -8
+	ring.offset_top = -8
+	ring.offset_right = 8
+	ring.offset_bottom = 8
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.add_child(ring)
 	ball_label = _label("25", f800, 52)
 	row.add_child(ball_label)
 	multi_label = _label("×2", f800, 34, ACCENT)
@@ -304,6 +314,14 @@ func _build_hud() -> void:
 	combo_label = _label("", f800, 28, ACCENT, 8)
 	combo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	right.add_child(combo_label)
+	dots = MultiDots.new()
+	dots.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	dots.offset_left = 30
+	dots.offset_right = 110
+	dots.offset_top = -300
+	dots.offset_bottom = -20
+	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(dots)
 	var pb := IconButton.new("pause", 70.0)
 	pb.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	pb.offset_left = -100
@@ -333,7 +351,13 @@ func _build_hud() -> void:
 	title_big.offset_top = 160
 
 
-func set_balls(n: int, multi: int, infinite := false) -> void:
+func set_balls(n: int, multi: int, infinite := false, streak := 0.0) -> void:
+	if ring.frac != streak:
+		ring.frac = streak
+		ring.queue_redraw()
+	if dots.count != multi:
+		dots.count = multi
+		dots.queue_redraw()
 	ball_label.text = "∞" if infinite else str(n)
 	# running low: the number turns red and beats, faster the fewer are left
 	var low := n < 10 and not infinite
@@ -348,7 +372,7 @@ func set_balls(n: int, multi: int, infinite := false) -> void:
 		ball_label.scale = Vector2.ONE
 	# more than one ball a throw: the ball turns gold
 	multi_label.visible = false
-	icon.modulate = Color(1.0, 0.85, 0.45) if multi > 1 else Color.WHITE
+	icon.modulate = Color.WHITE
 
 
 func set_dist(d: float, progress: float) -> void:
@@ -542,6 +566,35 @@ class IconButton extends Button:
 			"flag":
 				draw_line(c + Vector2(-s * 0.55, s * 0.85), c + Vector2(-s * 0.55, -s * 0.85), ink, s * 0.16, true)
 				draw_colored_polygon(PackedVector2Array([c + Vector2(-s * 0.5, -s * 0.85), c + Vector2(s * 0.75, -s * 0.5), c + Vector2(-s * 0.5, -s * 0.12)]), ink)
+
+
+## a ring round the ball count: how close the next extra ball per throw is
+class Ring extends Control:
+	var frac := 0.0
+
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5 - 3.0
+		draw_arc(c, r, 0, TAU, 48, Color(1, 1, 1, 0.18), 5.0, true)
+		if frac > 0.001:
+			draw_arc(c, r, -PI * 0.5, -PI * 0.5 + TAU * clampf(frac, 0.0, 1.0), 48, Color(1, 1, 1, 0.95), 5.0, true)
+
+
+## down the left side: how many balls each throw sends (one, two, three...), as balls drawn in circles
+class MultiDots extends Control:
+	var count := 1
+
+	func _draw() -> void:
+		for i in 3:
+			var on := i < count
+			var c := Vector2(size.x * 0.5, size.y - 40.0 - i * 84.0)
+			var r := 34.0 if i == count - 1 and count > 1 else 28.0
+			draw_circle(c, r, Color("63e6a0") if on else Color(1, 1, 1, 0.12))
+			draw_arc(c, r, 0, TAU, 40, Color(0, 0, 0, 0.25), 3.0, true)
+			for k in i + 1:
+				var a := TAU * k / float(i + 1) - PI * 0.5
+				var p := c + (Vector2(cos(a), sin(a)) * r * 0.42 if i > 0 else Vector2.ZERO)
+				draw_circle(p, 6.0, Color(1, 1, 1, 0.95 if on else 0.4))
 
 
 ## an on/off switch, drawn

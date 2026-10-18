@@ -659,7 +659,11 @@ func _apply_look() -> void:
 	env.background_color = hor
 	env.fog_light_color = hor
 	env.ambient_light_color = look_now.amb
-	env.fog_density = lerpf(look_now.fog, 0.007, k)
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_density = 1.0
+	env.fog_depth_begin = lerpf(12.0, 30.0, k)
+	env.fog_depth_end = lerpf(52.0 - look_now.fog * 300.0, 120.0, k)
+	env.fog_depth_curve = 1.4
 	var top: Color = bg.lerp(look_now.sky_top, k)
 	var low: Color = bg.lerp(look_now.ground.lerp(look_now.sky_hor, 0.35), k)
 	backdrop_im.clear_surfaces()
@@ -1247,8 +1251,11 @@ func _process(delta: float) -> void:
 	t += dt
 	var want := 7.0 + minf(_room_of(dist), 10) * 0.45
 	if mode == "endless":
+		# a wave in every room: slow just past the door, faster and faster towards the next one
 		var rn := _room_of(dist)
-		want = 7.0 + minf(rn % Rooms.COUNT, 49) * 0.1 + minf(rn / Rooms.COUNT, 3) * 1.0
+		var base := 6.0 + minf(rn % Rooms.COUNT, 49) * 0.07 + minf(rn / Rooms.COUNT, 3) * 1.0
+		var f := clampf((dist - rn * ROOM_LEN) / (ROOM_LEN - 20.0), 0.0, 1.0)
+		want = base + 5.0 * f * f * (3.0 - 2.0 * f)
 	if mode == "level1":
 		want = 6.5 + clampf(dist / Levels.L1_LEN, 0.0, 1.0) * 2.5
 	elif mode == "calm":
@@ -1306,7 +1313,13 @@ func _process(delta: float) -> void:
 
 
 func _hud_all() -> void:
-	hud.set_balls(balls, multi, mode == "calm")
+	# progress to the next ball per throw: ten crystals in a row for two, twenty-five for three
+	var streak := 1.0
+	if multi == 1:
+		streak = jar_streak / 10.0
+	elif multi == 2:
+		streak = (jar_streak - 10) / 15.0
+	hud.set_balls(balls, multi, mode == "calm", streak)
 	var prog := 0.0
 	if mode == "level1":
 		prog = dist / Levels.L1_LEN
@@ -1352,7 +1365,7 @@ func _place_camera(dt: float) -> void:
 	else:
 		roll = lerp_angle(roll, 0.0, 1.0 - exp(-dt * 1.5))
 	cam.rotation = Vector3(deg_to_rad(cam_pitch), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1 + roll)
-	cam.fov = 70.0 + clampf((speed - 9.0) * 0.9, 0.0, 8.0) + fov_kick
+	cam.fov = 62.0 + clampf((speed - 9.0) * 0.8, 0.0, 6.0) + fov_kick
 
 
 func _move_gates() -> void:
@@ -1412,7 +1425,7 @@ func _blocks(p: GPane) -> Vector2:
 	var s := a.z / (a.z - b.z)
 	var h := a.lerp(b, s)
 	var lp := Vector2(h.x, h.y)
-	return lp if Glass.inside(p.poly, lp, 0.22) else Vector2.INF
+	return lp if Glass.inside(p.poly, lp, 0.12) else Vector2.INF
 
 
 func _check_gates(prev: float) -> void:
@@ -1438,6 +1451,9 @@ func _check_gates(prev: float) -> void:
 
 
 func _crash(hit: Array, g: GGate) -> void:
+	if auto:
+		for h in hit:
+			print("CRASH gate=%s d=%.0f kind=%s area=%.2f lp=%s cam=%.2f" % [g.kind, g.d, h[0].kind, absf(Glass.area(h[0].poly)), str(h[1]), cam.position.x])
 	if g.grille and not g.grille_open:
 		_open_grille(g)
 	for h in hit:
@@ -1659,6 +1675,14 @@ func _count_hit(b: Dictionary) -> void:
 		hits += 1
 
 
+func _seg_dist2(a: Vector2, b: Vector2, p: Vector2) -> float:
+	var ab := b - a
+	var l := ab.length_squared()
+	if l < 1e-8:
+		return a.distance_to(p)
+	return (a + ab * clampf((p - a).dot(ab) / l, 0.0, 1.0)).distance_to(p)
+
+
 func _seg_dist(a: Vector3, b: Vector3, p: Vector3) -> float:
 	var ab := b - a
 	var l := ab.length_squared()
@@ -1800,7 +1824,32 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		var bb := Glass.bounds(p.poly)
 		fx.crumble(xf * Vector3(bb.get_center().x, bb.get_center().y, 0), xf.basis, bb.size * 0.5, L[0], dir)
 		count = 5
+	# a big pane that stands still breaks only where it was hit: a hole, cracks round it, the rest stays
+	var hole: bool = not crash and area > 6.0 and not p.gate.door and not p.move.is_valid() and not p.on_break.is_valid() and p.supports.is_empty() \
+		and not (p.kind in ["tempered", "laminated", "blast", "mirror", "frosted"]) and p.charge < 0.0
+	if hole:
+		count = clampi(int(10 + area * 2.2), 12, 34)
 	var cells := Glass.voronoi(p.poly, Glass.seeds_for(p.poly, lp, count))
+	var keep := []
+	if hole:
+		var R := 1.5
+		var kept_area := 0.0
+		var gone := []
+		for cell in cells:
+			var cc := Glass.centroid(cell)
+			# a piece goes if any of it is near the hit, so the hole is clear right round where the ball went
+			var near_d := INF
+			for k in cell.size():
+				near_d = minf(near_d, _seg_dist2(cell[k], cell[(k + 1) % cell.size()], lp))
+			if cc.distance_to(lp) < R or near_d < 1.05 or Glass.inside(cell, lp):
+				gone.append(cell)
+			else:
+				keep.append(cell)
+				kept_area += absf(Glass.area(cell))
+		if kept_area < area * 0.25:
+			keep = []
+		else:
+			cells = gone
 	for cell in cells:
 		var cc := Glass.centroid(cell)
 		var mi := _mesh_shard(Glass.moved(cell, -cc), p.kind, p.color_id)
@@ -1817,6 +1866,38 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 			v = away.normalized() * randf_range(2.0, 5.0) / mass + Vector3(0, randf_range(1.0, 3.0), -speed * 0.6)
 		var axis := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
 		shards.append({"node": mi, "v": v, "axis": axis, "w": randf_range(3.0, 12.0) / mass, "life": 0.0, "mass": mass, "rest": false})
+	# what is left of the pane stays where it was, cracked: each piece now breaks at one hit
+	for cell in keep:
+		var cc: Vector2 = Glass.centroid(cell)
+		var local := Glass.ccw(Glass.moved(cell, -cc))
+		var mi := MeshInstance3D.new()
+		mi.mesh = Glass.slab_mesh(local, p.kind, 0.15, p.color_id)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root3d.add_child(mi)
+		mi.transform = p.node.transform * Transform3D(Basis(), Vector3(cc.x, cc.y, 0))
+		var q := GPane.new()
+		q.node = mi
+		q.poly = local
+		q.kind = p.kind
+		q.color_id = p.color_id
+		q.hp = 1
+		q.blocks = p.blocks
+		q.base = mi.transform
+		q.gate = p.gate
+		q.bonus = p.bonus
+		p.gate.panes.append(q)
+		panes.append(q)
+		# the crack running into it from the hole
+		if cc.distance_to(lp) < 1.9 and randf() < 0.45:
+			var cq := MeshInstance3D.new()
+			var qm := QuadMesh.new()
+			qm.size = Vector2(1.1, 1.1)
+			cq.mesh = qm
+			cq.material_override = crack_mat
+			var toward := (lp - cc)
+			cq.position = Vector3(toward.x * 0.35, toward.y * 0.35, Glass.KINDS[p.kind].t * 0.5 + 0.01)
+			cq.rotation.z = randf() * TAU
+			mi.add_child(cq)
 	p.node.queue_free()
 	var cap := 260 if save.quality > 0 else 120
 	while shards.size() > cap:
@@ -2390,16 +2471,24 @@ func _auto_play() -> void:
 			continue
 		var gz: float = p.node.global_transform.origin.z
 		var ahead := -gz - dist
-		if ahead < 5.0 or ahead > 24.0:
+		if ahead < 3.0 or ahead > 24.0:
 			continue
 		var xf: Transform3D = p.node.global_transform
 		var l: Vector3 = xf.affine_inverse() * Vector3(cam.position.x, EYE, gz)
-		if not Glass.inside(p.poly, Vector2(l.x, l.y), 0.3):
+		if not Glass.inside(p.poly, Vector2(l.x, l.y), 0.15):
 			continue
 		var id: int = p.get_instance_id()
 		if _fired.has(id) and t - _fired[id] < 0.55:
 			continue
 		var aim := Vector3(cam.position.x, EYE, gz)
+		var el := Vector2(l.x, l.y)
+		if not Glass.inside(p.poly, el):
+			var c := Glass.centroid(p.poly)
+			for i in 10:
+				el = el.lerp(c, 0.25)
+				if Glass.inside(p.poly, el, -0.1):
+					break
+			aim = xf * Vector3(el.x, el.y, 0)
 		if p.weak != Vector2.INF:
 			aim = xf * Vector3(p.weak.x, p.weak.y, 0)
 		if ahead < best_d:

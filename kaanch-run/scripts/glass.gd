@@ -4,14 +4,14 @@ extends RefCounted
 
 # every kind of glass: how thick, how many hits, how it looks, how many pieces it breaks into
 const KINDS := {
-	"thin": {"t": 0.04, "hp": 1, "face": Color(0.82, 0.95, 0.97, 0.16), "side": Color(0.72, 0.92, 0.9, 0.7), "rim": Color(0.92, 1.0, 1.0, 0.5), "rim_w": 0.035, "pieces": 14},
-	"mid": {"t": 0.1, "hp": 1, "face": Color(0.7, 0.92, 0.92, 0.24), "side": Color(0.55, 0.85, 0.82, 0.85), "rim": Color(0.85, 0.98, 0.97, 0.6), "rim_w": 0.045, "pieces": 11},
-	"thick": {"t": 0.34, "hp": 2, "face": Color(0.5, 0.82, 0.78, 0.36), "side": Color(0.26, 0.6, 0.55, 0.94), "rim": Color(0.6, 0.9, 0.84, 0.85), "rim_w": 0.08, "pieces": 8},
-	"slab": {"t": 0.6, "hp": 2, "face": Color(0.38, 0.72, 0.66, 0.5), "side": Color(0.18, 0.48, 0.44, 0.97), "rim": Color(0.5, 0.82, 0.76, 0.9), "rim_w": 0.1, "pieces": 7},
+	"thin": {"t": 0.04, "hp": 1, "face": Color(0.66, 0.8, 0.86, 0.42), "side": Color(0.5, 0.66, 0.74, 0.85), "rim": Color(0.92, 1.0, 1.0, 0.5), "rim_w": 0.035, "pieces": 14},
+	"mid": {"t": 0.1, "hp": 1, "face": Color(0.6, 0.76, 0.84, 0.5), "side": Color(0.44, 0.6, 0.7, 0.9), "rim": Color(0.85, 0.98, 0.97, 0.6), "rim_w": 0.045, "pieces": 11},
+	"thick": {"t": 0.34, "hp": 2, "face": Color(0.52, 0.7, 0.8, 0.6), "side": Color(0.34, 0.5, 0.6, 0.95), "rim": Color(0.6, 0.9, 0.84, 0.85), "rim_w": 0.08, "pieces": 8},
+	"slab": {"t": 0.6, "hp": 2, "face": Color(0.46, 0.64, 0.76, 0.68), "side": Color(0.28, 0.44, 0.55, 0.97), "rim": Color(0.5, 0.82, 0.76, 0.9), "rim_w": 0.1, "pieces": 7},
 	# a brick of glass: very thick, breaks into heavy chunks
-	"block": {"t": 0.9, "hp": 2, "face": Color(0.45, 0.78, 0.72, 0.44), "side": Color(0.2, 0.52, 0.47, 0.96), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.09, "pieces": 6},
+	"block": {"t": 0.9, "hp": 2, "face": Color(0.48, 0.66, 0.78, 0.64), "side": Color(0.3, 0.46, 0.57, 0.96), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.09, "pieces": 6},
 	# a giant cube of glass, as wide as the way and two metres deep
-	"giant": {"t": 2.0, "hp": 2, "face": Color(0.42, 0.75, 0.7, 0.4), "side": Color(0.2, 0.5, 0.46, 0.9), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.12, "pieces": 7},
+	"giant": {"t": 2.0, "hp": 2, "face": Color(0.48, 0.66, 0.78, 0.6), "side": Color(0.3, 0.46, 0.57, 0.95), "rim": Color(0.55, 0.86, 0.8, 0.9), "rim_w": 0.12, "pieces": 7},
 	# a mirror: silvered, the first ball bounces off it
 	"mirror": {"t": 0.08, "hp": 1, "face": Color(0.85, 0.88, 0.92, 0.94), "side": Color(0.5, 0.55, 0.6, 1.0), "rim": Color(0.9, 0.93, 0.96, 0.8), "rim_w": 0.05, "pieces": 10},
 	# tempered: bursts into little cubes
@@ -41,7 +41,9 @@ static func mats() -> void:
 	glass_mat.vertex_color_use_as_albedo = true
 	glass_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glass_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	glass_mat.roughness = 0.06
+	glass_mat.roughness = 0.12
+	glass_mat.albedo_texture = _scratch_tex()
+	glass_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	glass_mat.metallic = 0.15
 	glass_mat.metallic_specular = 0.9
 	# glass catches the light at its edges, the way real glass does seen at an angle
@@ -67,6 +69,38 @@ static func mats() -> void:
 	rim_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	# edges that glow in their own colour (coloured glass, blast glass)
 	glow_rim_mat = rim_mat.duplicate()
+
+
+## fine scratches and smudges, so glass reads as a surface even where it is clear
+static func _scratch_tex() -> Texture2D:
+	var S := 256
+	var img := Image.create(S, S, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.94, 0.95, 0.96, 0.92))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	# soft smudges
+	for k in 22:
+		var c := Vector2(rng.randf() * S, rng.randf() * S)
+		var r := rng.randf_range(10.0, 34.0)
+		for y in range(int(c.y - r), int(c.y + r)):
+			for x in range(int(c.x - r), int(c.x + r)):
+				var d := Vector2(x, y).distance_to(c) / r
+				if d < 1.0:
+					var px := Vector2i(posmod(x, S), posmod(y, S))
+					var col := img.get_pixelv(px)
+					img.set_pixelv(px, col.lerp(Color(1, 1, 1, 1.0), (1.0 - d) * 0.25))
+	# thin bright scratches
+	for k in 70:
+		var p := Vector2(rng.randf() * S, rng.randf() * S)
+		var a := rng.randf() * TAU
+		var dir := Vector2(cos(a), sin(a))
+		var ln := rng.randf_range(8.0, 60.0)
+		for i in int(ln):
+			p += dir
+			dir = dir.rotated(rng.randf_range(-0.04, 0.04))
+			img.set_pixelv(Vector2i(posmod(int(p.x), S), posmod(int(p.y), S)), Color(1, 1, 1, 1.0))
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## light streaks for the mirror, so it looks silvered rather than flat grey
@@ -291,6 +325,8 @@ static func slab_mesh(poly: PackedVector2Array, kind: String, rim_scale := 1.0, 
 			for q in [poly[0], poly[i], poly[i + 1]]:
 				if mirror:
 					st.set_uv((q - b.position) / maxf(0.01, maxf(b.size.x, b.size.y)))
+				else:
+					st.set_uv(q / 2.2)
 				st.add_vertex(Vector3(q.x, q.y, z))
 	st.set_color(side)
 	for i in n:
@@ -299,8 +335,7 @@ static func slab_mesh(poly: PackedVector2Array, kind: String, rim_scale := 1.0, 
 		var e := (c - a).normalized()
 		st.set_normal(Vector3(e.y, -e.x, 0))
 		for v in [Vector3(a.x, a.y, hz), Vector3(c.x, c.y, hz), Vector3(c.x, c.y, -hz), Vector3(a.x, a.y, hz), Vector3(c.x, c.y, -hz), Vector3(a.x, a.y, -hz)]:
-			if mirror:
-				st.set_uv(Vector2(0.5, 0.5))
+			st.set_uv(Vector2(0.5, 0.5))
 			st.add_vertex(v)
 	st.set_material(mirror_mat if mirror else glass_mat)
 	var mesh := st.commit()
