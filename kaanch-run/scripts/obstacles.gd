@@ -72,7 +72,7 @@ static func _build(G, type: String, d: float, r: int) -> void:
 				var x0 := -W + i * 1.6
 				G.pane(g, Glass.rect(x0 + 0.03, x0 + 1.57, Y0, Y1), d, "mid", (c0 + (i % 2)) % Glass.COLORS.size())
 		"layers":
-			var n := 2 if r < 2 else 3
+			var n := 2
 			for i in n:
 				var gi: GGate = g if i == 0 else G.new_gate("layers", d + i * 3.2)
 				var w := randf_range(1.0, 1.8)
@@ -119,10 +119,12 @@ static func _build(G, type: String, d: float, r: int) -> void:
 			var bars := 1 if r < 4 else 2
 			var bk: String = ["thin", "mid", "thick", "slab"][mini(3, randi() % (2 + r / 2))]
 			var bh := randf_range(0.32, 0.55)
+			# it turns on an axle at the side of the way, and its long arm sweeps across the middle
+			var hub := Vector2(s * 2.7, EYE)
 			for i in bars:
-				var p: GPane = G.pane(g, Glass.rect(-2.2, 2.2, EYE - bh, EYE + bh), d - i * 0.05, bk, G.rng_color(0.3))
+				var p: GPane = G.pane(g, Glass.rect(hub.x - 3.9, hub.x + 3.9, EYE - bh, EYE + bh), d - i * 0.05, bk, G.rng_color(0.3))
 				var off := randf() * PI + i * PI * 0.5
-				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off + t * w)
+				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, hub, off + t * w)
 		"spinner":
 			var hub := Vector2(s * 1.1, EYE + 0.55)
 			var w := randf_range(0.9, 1.9 + minf(r, 6) * 0.1) * (1 if randf() < 0.5 else -1)
@@ -236,7 +238,7 @@ static func _build(G, type: String, d: float, r: int) -> void:
 		"fall_blocks":
 			# tall blocks dropping one after another, landing three or four seconds before you get there
 			for i in 3:
-				var bx: float = [-0.9, 0.9, 0.0][i] * s
+				var bx: float = [-2.6, 2.6, 0.0][i] * s
 				var dz := d + i * 5.0
 				var gi: GGate = g if i == 0 else G.new_gate("fall_blocks", dz)
 				var p: GPane = G.pane(gi, Glass.rect(bx - 1.4, bx + 1.4, 0.05, 5.2), dz, "block")
@@ -260,14 +262,14 @@ static func _build(G, type: String, d: float, r: int) -> void:
 			var ph := g.ph
 			p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, top), sin(t * ws + ph) * amp)
 		"scissors":
-			# two long blades that open and close like scissors
-			var c := Vector2(0, EYE)
+			# two long blades hinged at the walls, like jaws: they swing up open and come down shut across the middle
 			var ws := randf_range(1.4, 2.2)
 			var ph := g.ph
 			for i in 2:
 				var sd := -1.0 if i == 0 else 1.0
-				var p: GPane = G.pane(g, Glass.rect(-3.4, 3.4, EYE - 0.22, EYE + 0.22), d + i * 0.12, "thick" if r >= 4 else "mid")
-				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, c, sd * (0.12 + 0.55 * (0.5 + 0.5 * sin(t * ws + ph))))
+				var c := Vector2(sd * 5.6, EYE)
+				var p: GPane = G.pane(g, Glass.rect(minf(c.x, -0.15 * sd), maxf(c.x, -0.15 * sd), EYE - 0.24, EYE + 0.24), d + i * 0.12, "thick" if r >= 4 else "mid")
+				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, c, -sd * 0.62 * (0.5 + 0.5 * sin(t * ws + ph)))
 		"saw_disc":
 			# a round blade of glass running along the way, turning
 			var p: GPane = G.pane(g, Glass.ngon(16, 1.35, Vector2(0, EYE - 0.3)), d, "thick")
@@ -295,8 +297,10 @@ static func _build(G, type: String, d: float, r: int) -> void:
 				var gi: GGate = g if i == 0 else G.new_gate("blade_line", dz)
 				var w := randf_range(0.8, 2.4) * (1.0 if i % 2 == 0 else -1.0)
 				var off := randf() * PI
-				var p: GPane = G.pane(gi, Glass.rect(-2.3, 2.3, EYE - 0.3, EYE + 0.3), dz, ["mid", "thick"][i % 2] if r >= 3 else "mid")
-				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, Vector2(0, EYE), off + t * w)
+				# on axles at the sides, left and right in turn
+				var hub := Vector2((2.7 if i % 2 == 0 else -2.7) * s, EYE)
+				var p: GPane = G.pane(gi, Glass.rect(hub.x - 3.8, hub.x + 3.8, EYE - 0.3, EYE + 0.3), dz, ["mid", "thick"][i % 2] if r >= 3 else "mid")
+				p.move = func(pp: GPane, t: float, _a: float): G.spin_about(pp, hub, off + t * w)
 		# ---- doors that move by themselves ----
 		"sensor_door":
 			# opens as you come; now and then it sticks shut

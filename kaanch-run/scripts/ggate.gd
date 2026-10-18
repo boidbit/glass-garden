@@ -14,3 +14,4 @@ var finale := false
 var grille: Node3D = null
 var grille_open := false
 var end_level := false
+var burst := false

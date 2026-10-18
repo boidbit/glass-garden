@@ -32,6 +32,7 @@ var fov_kick := 0.0
 var over_t := -1.0
 var hitstop_until := 0
 var slow_until := 0.0
+var look_fast_until := 0.0
 
 # this run's numbers
 var score := 0
@@ -90,6 +91,22 @@ var glow_tex: Texture2D
 var crack_tex: Texture2D
 var crack_mat: StandardMaterial3D
 var mark_mat: StandardMaterial3D
+var pow_mats: Array = []
+var berg_mat: StandardMaterial3D
+var chand_mat: StandardMaterial3D
+var column_mesh: ArrayMesh
+
+# crystals of power: [colour, seconds]
+const POW := {"slow": [Color("ffd36b"), 5.0], "burst": [Color("63e6a0"), 8.0], "iron": [Color("ff7a3d"), 7.0]}
+const POW_LIST := ["slow", "burst", "iron"]
+var power := ""
+var power_until := 0.0
+
+# things that happen round you as you go: pillars rising, roofs opening, chandeliers falling, crystal mountains
+var risers: Array = []
+var roofs: Array = []
+var chandeliers: Array = []
+var floaters: Array = []
 
 # testing from the command line
 var auto := false
@@ -293,8 +310,42 @@ func _make_scene() -> void:
 	im.rim = 0.6
 	im.rim_tint = 0.1
 	marble_mats.append(im)
+	# the ball of hot iron
+	var hot := im.duplicate() as StandardMaterial3D
+	hot.emission_texture = null
+	hot.emission = Color("ff6a1f")
+	hot.emission_energy_multiplier = 2.2
+	hot.albedo_color = Color("ffb27a")
+	marble_mats.append(hot)
+	for k in POW_LIST:
+		var pm := StandardMaterial3D.new()
+		var pc: Color = POW[k][0]
+		pm.albedo_color = Color(pc.r, pc.g, pc.b, 0.85)
+		pm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		pm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		pm.roughness = 0.05
+		pm.emission_enabled = true
+		pm.emission = pc
+		pm.emission_energy_multiplier = 1.8
+		pow_mats.append(pm)
 	# a jar of marbles
 	crystal_mesh = _crystal_shape()
+	column_mesh = _column_shape()
+	berg_mat = StandardMaterial3D.new()
+	berg_mat.albedo_color = Color(0.62, 0.84, 0.95, 0.55)
+	berg_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	berg_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	berg_mat.roughness = 0.08
+	berg_mat.metallic = 0.3
+	berg_mat.emission_enabled = true
+	berg_mat.emission = Color("7fd0ff")
+	berg_mat.emission_energy_multiplier = 0.7
+	berg_mat.rim_enabled = true
+	berg_mat.rim = 0.8
+	chand_mat = berg_mat.duplicate() as StandardMaterial3D
+	chand_mat.albedo_color = Color(0.92, 0.96, 1.0, 0.75)
+	chand_mat.emission = Color("fff0d8")
+	chand_mat.emission_energy_multiplier = 1.1
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.26
 	cyl.bottom_radius = 0.3
@@ -583,6 +634,11 @@ func _reset(m: String, from_room := 0) -> void:
 	shards.clear()
 	anims.clear()
 	shard_pool.clear()
+	risers.clear()
+	roofs.clear()
+	chandeliers.clear()
+	floaters.clear()
+	power = ""
 	room = -1
 	world = ""
 	last_kind = ""
@@ -714,7 +770,7 @@ func _apply_look() -> void:
 
 
 func _look_step(dt: float) -> void:
-	var k := 1.0 - exp(-dt * 1.2)
+	var k := 1.0 - exp(-dt * (4.0 if t < look_fast_until else 1.2))
 	var changed := false
 	for key in look_to.keys():
 		var a = look_now[key]
@@ -735,7 +791,7 @@ func _stream() -> void:
 		var d0 := next_seg * SEG
 		var sec := section_at(d0 + 1.0)
 		var prev := section_at(d0 - 1.0) if d0 >= SEG else "corridor"
-		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev, _mood_at(d0 + 2.0))
+		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev, _mood_at(d0 + 2.0), not _roof_opens(d0 + 1.0))
 		root3d.add_child(seg)
 		segs.append({"node": seg, "d": d0})
 		if mode == "endless":
@@ -785,6 +841,7 @@ func _extras(d0: float, sec: String) -> void:
 	elif sec == "hall":
 		if randf() < 0.45:
 			_side_bonus(d0 + randf_range(2.0, 14.0), -1.0 if randf() < 0.5 else 1.0)
+	_spectacle(d0, sec)
 
 
 func _bonus_pane(g: GGate, poly: PackedVector2Array, d: float, color_id: int, pts := 15) -> GPane:
@@ -908,7 +965,7 @@ func _spawn_in(a: float, b: float) -> void:
 		return
 	var r := _room_of(a)
 	var dd := _door_d(r)
-	if dd >= a and dd < b and mode == "endless":
+	if dd >= a and dd < b and mode == "endless" and Rooms.has_door(r):
 		_door(dd)
 	if mode == "endless":
 		# the rooms made by hand: each the same every run (its own seed), none twice before the fiftieth
@@ -1040,6 +1097,12 @@ func target(kind: String, pos: Vector3, radius: float, g = null, color_id := -1)
 			# a crystal: hit it for balls
 			m.mesh = crystal_mesh
 			m.material_override = jar_mat
+		"power":
+			m.mesh = crystal_mesh
+			m.material_override = pow_mats[color_id]
+			m.scale = Vector3(1.25, 1.35, 1.25)
+			glow_col = POW[POW_LIST[color_id]][0]
+			glow_col.a = 0.85
 		"hub", "button":
 			var sm := SphereMesh.new()
 			sm.radius = 0.3
@@ -1067,7 +1130,7 @@ func target(kind: String, pos: Vector3, radius: float, g = null, color_id := -1)
 	tg.radius = radius
 	tg.gate = g
 	tg.color_id = color_id
-	if kind == "prism":
+	if kind == "prism" or kind == "power":
 		tg.spin = 0.9
 	elif kind == "hub" or kind == "button":
 		tg.spin = 0.0
@@ -1084,7 +1147,7 @@ func _jars(d: float) -> void:
 	var sd := -1.0 if randf() < 0.5 else 1.0
 	for i in n:
 		var side := sd if i == 0 else -sd
-		var x := side * randf_range(2.6, HALF_W - 1.0)
+		var x := side * randf_range(2.6, HALF_W - 1.6)
 		var h := randf_range(0.5, 1.6)
 		var dz := d + i * 2.0
 		var st := SurfaceTool.new()
@@ -1096,6 +1159,12 @@ func _jars(d: float) -> void:
 		m.mesh = st.commit()
 		m.position = Vector3(x, 0, -dz)
 		decor(g, m)
+		# now and then a crystal of power instead: slow time, three balls a throw, or a ball of hot iron
+		if i == 0 and mode == "endless" and _room_of(d) >= 1 and randf() < 0.2:
+			var pk: String = POW_LIST[randi() % POW_LIST.size()]
+			var pt := target("power", Vector3(x, h + 0.65, -dz), 0.7, null, POW_LIST.find(pk))
+			pt.on_hit = func(): _power_got(pk)
+			continue
 		var tg := target("jar", Vector3(x, h + 0.5, -dz), 0.6)
 		tg.spin = 0.0
 		tg.on_hit = func(): _jar_got(tg)
@@ -1220,6 +1289,8 @@ func _process(delta: float) -> void:
 		dt *= 0.08
 	if t < slow_until:
 		dt *= 0.35
+	elif power == "slow" and t < power_until:
+		dt *= 0.55
 	if state == S.PAUSE:
 		return
 	if state == S.MENU and mode == "gallery":
@@ -1245,17 +1316,25 @@ func _process(delta: float) -> void:
 		_update_shards(dt)
 		_update_balls(dt)
 		_run_anims(dt)
+		_spectacle_step(dt)
 		fx.step(dt, flying)
 		_look_step(dt)
 		return
 	t += dt
+	if power != "" and t >= power_until:
+		power = ""
+	if power != "":
+		hud.set_power(power, clampf((power_until - t) / float(POW[power][1]), 0.0, 1.0), POW[power][0])
+	else:
+		hud.set_power("", 0.0, Color.WHITE)
 	var want := 7.0 + minf(_room_of(dist), 10) * 0.45
 	if mode == "endless":
 		# a wave in every room: slow just past the door, faster and faster towards the next one
-		var rn := _room_of(dist)
+		var rn := _room_of(dist + 6.0)
+		var c0 := (rn / Rooms.CP_EVERY) * Rooms.CP_EVERY
 		var base := 6.0 + minf(rn % Rooms.COUNT, 49) * 0.07 + minf(rn / Rooms.COUNT, 3) * 1.0
-		var f := clampf((dist - rn * ROOM_LEN) / (ROOM_LEN - 20.0), 0.0, 1.0)
-		want = base + 5.0 * f * f * (3.0 - 2.0 * f)
+		var f := clampf((dist + 6.0 - c0 * ROOM_LEN) / (ROOM_LEN * Rooms.CP_EVERY - 30.0), 0.0, 1.0)
+		want = base + 5.5 * f * f * (3.0 - 2.0 * f)
 	if mode == "level1":
 		want = 6.5 + clampf(dist / Levels.L1_LEN, 0.0, 1.0) * 2.5
 	elif mode == "calm":
@@ -1266,6 +1345,7 @@ func _process(delta: float) -> void:
 	_stream()
 	_move_gates()
 	_spin_targets(dt)
+	_spectacle_step(dt)
 	_check_gates(prev)
 	_update_balls(dt)
 	_update_shards(dt)
@@ -1289,9 +1369,6 @@ func _process(delta: float) -> void:
 			small += "  ·  THE ROOM TURNS"
 		var L: Dictionary = Worlds.look(Rooms.world_of(room), k % Rooms.PER_WORLD)
 		hud.show_title(L.name, small, (L.sun as Color).lerp(Color.WHITE, 0.3))
-		hud.flash_screen((L.sun as Color), 0.35, 0.7)
-		sfx.play("room", -2.0)
-		vibe(25)
 	var sn := section_at(dist + 2.0)
 	if sn != sec_now:
 		sec_now = sn
@@ -1324,7 +1401,8 @@ func _hud_all() -> void:
 	if mode == "level1":
 		prog = dist / Levels.L1_LEN
 	elif mode == "endless":
-		prog = fmod(dist, ROOM_LEN) / ROOM_LEN
+		var span := ROOM_LEN * Rooms.CP_EVERY
+		prog = fmod(dist + 6.0, span) / span
 	hud.set_dist(dist, prog)
 	hud.set_score(score)
 	hud.set_combo(combo_color, combo_n, _mult())
@@ -1352,7 +1430,7 @@ func _place_camera(dt: float) -> void:
 	backdrop.position = Vector3(0, EYE, -dist - 215.0)
 	dust.position = cam.position + Vector3(0, 0, -16.0)
 	var sa := section_at(dist + 12.0)
-	look_to["sky"] = 1.0 if sa == "sky" else (0.85 if sa == "corridor" and _mood_at(dist + 12.0) in Worlds.OPEN else 0.0)
+	look_to["sky"] = 1.0 if sa == "sky" else (0.85 if sa == "corridor" and _mood_at(dist + 12.0) in Worlds.OPEN else (0.7 if sa == "hall" and _roof_opens(dist + 12.0) else 0.0))
 	if dt <= 0.0 and not look_now.is_empty():
 		look_now["sky"] = look_to["sky"]
 		_apply_look()
@@ -1446,7 +1524,7 @@ func _check_gates(prev: float) -> void:
 		var grille_shut: bool = g.grille != null and not g.grille_open
 		if hit.size() or grille_shut:
 			_crash(hit, g)
-		elif g.door:
+		if g.door:
 			_checkpoint(g)
 
 
@@ -1476,6 +1554,7 @@ func _crash(hit: Array, g: GGate) -> void:
 
 
 func _checkpoint(g: GGate) -> void:
+	look_fast_until = t + 3.5
 	var r := _room_of(g.d) + 1
 	if r > cp_room:
 		cp_room = r
@@ -1564,13 +1643,14 @@ func _throw(dir: Vector3) -> void:
 	shots += 1
 	var shot := {"hit": false}
 	var from := cam.position + dir * 1.3 + Vector3(0, -0.3, 0)
-	for i in multi:
+	var n_balls := 3 if power == "burst" else multi
+	for i in n_balls:
 		var d2 := dir
 		if i > 0:
 			d2 = dir.rotated(Vector3.UP, (0.035 if i == 1 else -0.035))
 		var mi := MeshInstance3D.new()
 		mi.mesh = marble_mesh
-		mi.material_override = marble_mats[0]
+		mi.material_override = marble_mats[1] if power == "iron" else marble_mats[0]
 		mi.position = from
 		root3d.add_child(mi)
 		flying.append({"node": mi, "v": d2 * (BALL_SPEED + speed), "life": 0.0, "pts": [from], "col": Color(0.78, 0.82, 0.88), "shot": shot, "landed": false})
@@ -1697,6 +1777,10 @@ func _seg_dist(a: Vector3, b: Vector3, p: Vector3) -> float:
 func _hit(p: GPane, lp: Vector2, dir: Vector3, _b: Dictionary) -> String:
 	var hit_w: Vector3 = p.node.global_transform * Vector3(lp.x, lp.y, 0)
 	fx.spark(hit_w, Glass.look(p.kind, p.color_id)[2], 16)
+	# a ball of hot iron: any glass goes at one hit
+	if power == "iron" and p.kind != "mirror":
+		break_pane(p, lp, dir)
+		return "break"
 	# the weak spot breaks it at once
 	if p.weak != Vector2.INF and lp.distance_to(p.weak) < 0.42:
 		hud.popup("Weak spot!", cam.unproject_position(hit_w), Color("ff8a5c"))
@@ -1820,6 +1904,8 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 	var count := clampi(int(K.pieces * clampf(0.6 + area * 0.12, 0.6, 1.6)), 4, 24)
 	if save.quality == 0:
 		count = maxi(4, count * 2 / 3)
+	if p.gate.door:
+		count = 40 if save.quality > 0 else 26
 	if p.kind == "tempered":
 		var bb := Glass.bounds(p.poly)
 		fx.crumble(xf * Vector3(bb.get_center().x, bb.get_center().y, 0), xf.basis, bb.size * 0.5, L[0], dir)
@@ -1864,6 +1950,9 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		v += Vector3(randf_range(-0.5, 0.5), randf_range(-0.3, 0.3), randf_range(-0.5, 0.5))
 		if crash:
 			v = away.normalized() * randf_range(2.0, 5.0) / mass + Vector3(0, randf_range(1.0, 3.0), -speed * 0.6)
+		elif p.gate.door:
+			# the whole wall bursts away from you, wide
+			v = Vector3(away.x * 1.6, away.y * 1.2 + randf_range(0.5, 2.5), 0) + dir * randf_range(6.0, 14.0)
 		var axis := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized()
 		shards.append({"node": mi, "v": v, "axis": axis, "w": randf_range(3.0, 12.0) / mass, "life": 0.0, "mass": mass, "rest": false})
 	# what is left of the pane stays where it was, cracked: each piece now breaks at one hit
@@ -1932,6 +2021,8 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		_collapse(sp)
 	if p.on_break.is_valid():
 		p.on_break.call()
+	if p.gate.door and not crash:
+		_door_burst(p.gate)
 
 
 func _combo(color_id: int, at: Vector3) -> void:
@@ -1956,6 +2047,8 @@ func _target_burst(tg: GTarget) -> void:
 	var col := Color(0.8, 1, 1)
 	if tg.kind == "prism":
 		col = Glass.COLORS[tg.color_id]
+	elif tg.kind == "power":
+		col = POW[POW_LIST[tg.color_id]][0]
 	elif tg.kind != "jar":
 		col = Color("ffc861")
 	fx.spark(pos, col, 30, 1.3)
@@ -1964,7 +2057,7 @@ func _target_burst(tg: GTarget) -> void:
 	var cells := Glass.voronoi(hex, Glass.seeds_for(hex, Vector2(0.05, 0.02), 6))
 	for cell in cells:
 		var cc := Glass.centroid(cell)
-		var mi := _mesh_shard(Glass.moved(cell, -cc), "mid", tg.color_id)
+		var mi := _mesh_shard(Glass.moved(cell, -cc), "mid", tg.color_id if tg.kind == "prism" else -1)
 		mi.global_position = pos + Vector3(cc.x, cc.y, 0)
 		shards.append({"node": mi, "v": Vector3(cc.x, cc.y + 0.3, 0).normalized() * randf_range(2.0, 4.0), "axis": Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized(), "w": randf_range(4.0, 12.0), "life": 0.0})
 	tg.node.queue_free()
@@ -2049,6 +2142,7 @@ func mount(n0: int, type: String) -> void:
 		elif sec == "tunnel":
 			top = Worlds.T_C.y + Worlds.T_R - 0.4
 		var rail_done := false
+		var ring_done := false
 		for p: GPane in g.panes:
 			if p.move.is_valid():
 				p.move.call(p, 0.0, 300.0)
@@ -2067,11 +2161,37 @@ func mount(n0: int, type: String) -> void:
 			var xf: Transform3D = p.node.transform
 			var z := xf.origin.z
 			if p.pivot != Vector2.INF:
-				# an axle at the middle it turns about, held from above
 				var pv := p.pivot
-				Worlds._box_xf(st, Transform3D(Basis(Vector3(1, 0, 0), PI * 0.5).scaled(Vector3(0.34, 0.3, 0.34)), Vector3(pv.x, pv.y, z + 0.18)), Color("8a939c"))
-				if sec != "sky" and pv.y < top - 0.2:
-					Worlds.box(st, Vector3(pv.x, (pv.y + top) * 0.5, z + 0.3), Vector3(0.12, top - pv.y, 0.12), Color("8a939c"))
+				if absf(pv.x) < 2.0 and absf(pv.y - EYE) < 1.8:
+					# turning about the middle of the way: nothing may stand where you pass, so it runs
+					# in a steel ring round its edge, the ring held from the walls (once for the whole gate)
+					if not ring_done:
+						ring_done = true
+						var rr := 0.0
+						for q: GPane in g.panes:
+							if q.pivot == Vector2.INF or q.pivot.distance_to(pv) > 0.01:
+								continue
+							for v in q.poly:
+								rr = maxf(rr, (Vector2(q.base.origin.x, q.base.origin.y) + v).distance_to(pv))
+						rr += 0.22
+						var ring_n := 32
+						for k in ring_n:
+							var a0 := TAU * k / ring_n
+							var cpos := Vector2(pv.x, pv.y) + Vector2(cos(a0), sin(a0)) * rr
+							if cpos.y < -0.1:
+								continue
+							Worlds._box_xf(st, Transform3D(Basis(Vector3(0, 0, 1), a0 + PI * 0.5) * Basis.from_scale(Vector3(rr * TAU / ring_n + 0.05, 0.16, 0.2)), Vector3(cpos.x, cpos.y, z + 0.28)), Color("8a939c"))
+						if sec != "sky":
+							var wall := Worlds.HALL_W if sec == "hall" else (Worlds.T_R - 0.3 if sec == "tunnel" else HALF_W + 0.3)
+							for sd in [-1.0, 1.0]:
+								var x0: float = pv.x + sd * rr
+								if absf(wall) > absf(x0):
+									Worlds.box(st, Vector3((x0 + sd * wall) * 0.5, pv.y, z + 0.28), Vector3(absf(sd * wall - x0), 0.18, 0.18), Color("8a939c"))
+				else:
+					# an axle at the side it turns about, held from above
+					Worlds._box_xf(st, Transform3D(Basis(Vector3(1, 0, 0), PI * 0.5).scaled(Vector3(0.34, 0.3, 0.34)), Vector3(pv.x, pv.y, z + 0.18)), Color("8a939c"))
+					if sec != "sky" and pv.y < top - 0.2:
+						Worlds.box(st, Vector3(pv.x, (pv.y + top) * 0.5, z + 0.3), Vector3(0.12, top - pv.y, 0.12), Color("8a939c"))
 			elif moving:
 				# it hangs from a rail across the way, on a rod
 				var hx := xf.origin.x + b.get_center().x
@@ -2455,6 +2575,365 @@ func _update_shards(dt: float) -> void:
 			_free_shard(n)
 			shards.remove_at(i)
 		i -= 1
+
+
+# ---------- things that happen round you: none of them can hurt you ----------
+## does the roof of the great hall open here?
+func _roof_opens(d: float) -> bool:
+	if section_at(d) != "hall":
+		return false
+	if mode == "level1":
+		return true
+	return mode == "endless" and posmod(_room_of(d), Rooms.CP_EVERY) != 0
+
+
+func _spectacle(d0: float, sec: String) -> void:
+	if mode != "endless" and mode != "level1":
+		return
+	if sec == "corridor" or sec == "hall":
+		if posmod(next_seg, 2) == 0 and randf() < 0.6:
+			_riser_pair(d0 + randf_range(3.0, 13.0), sec)
+	if sec == "hall":
+		if _roof_opens(d0 + 1.0):
+			_roof_seg(d0)
+		# one chandelier in each great hall, in its second piece
+		if section_at(d0 - SEG + 1.0) == "hall" and section_at(d0 - 2.0 * SEG + 1.0) != "hall":
+			_chandelier(d0 + 8.0, -1.0 if randf() < 0.5 else 1.0)
+	elif sec == "sky":
+		if randf() < 0.55:
+			_crystal_mount(d0 + randf_range(2.0, 14.0), -1.0 if randf() < 0.5 else 1.0)
+
+
+## two pillars at the sides that come up out of the floor as you come, so the room builds itself for you
+func _riser_pair(d: float, sec: String) -> void:
+	var g := new_gate("riser", d)
+	var w := _world_at(d)
+	var T: Dictionary = Worlds.TUNE[w]
+	var acc: Color = Worlds.def(w).accent
+	var hall := sec == "hall"
+	var hw := (Worlds.HALL_W - 4.5) if hall else (HALF_W - 0.45)
+	var h := 11.0 if hall else CEIL - 0.05
+	var wd := 1.1 if hall else 0.62
+	var stone: Color = (T.wall2 as Color).lerp(Color("d8dde2"), 0.35)
+	for sd in [-1.0, 1.0]:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		Worlds.box(st, Vector3(0, h * 0.5, 0), Vector3(wd, h, wd), stone)
+		Worlds.box(st, Vector3(0, 0.2, 0), Vector3(wd + 0.35, 0.4, wd + 0.35), stone * 0.8)
+		Worlds.box(st, Vector3(0, h - 0.25, 0), Vector3(wd + 0.3, 0.3, wd + 0.3), stone * 0.85)
+		st.set_material(Worlds.lit_mat)
+		var m := MeshInstance3D.new()
+		m.mesh = st.commit()
+		var gs := SurfaceTool.new()
+		gs.begin(Mesh.PRIMITIVE_TRIANGLES)
+		# bright bands, so you see them come up
+		for y in [0.42, h * 0.5, h - 0.45]:
+			Worlds.box(gs, Vector3(0, y, 0), Vector3(wd + 0.06, 0.07, wd + 0.06), acc)
+		Worlds.box(gs, Vector3(-sd * (wd * 0.5 + 0.01), h * 0.5, 0), Vector3(0.03, h - 1.2, 0.12), acc * 0.8)
+		gs.set_material(Worlds.glow_mat)
+		gs.commit(m.mesh)
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.position = Vector3(sd * hw, -h - 0.4, -d)
+		decor(g, m)
+		risers.append({"node": m, "d": d, "h": h, "late": randf_range(0.0, 5.0) + (0.0 if sd < 0.0 else 2.5), "up": false, "go": false})
+
+
+## a piece of the great hall's roof: two halves that swing up and open to the sky as you come
+func _roof_seg(d0: float) -> void:
+	var g := new_gate("roof", d0)
+	var w := _world_at(d0 + 1.0)
+	var T: Dictionary = Worlds.TUNE[w]
+	var acc: Color = Worlds.def(w).accent
+	var hw := Worlds.HALL_W + 1.0
+	var pair := []
+	for sd in [-1.0, 1.0]:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		Worlds.box(st, Vector3(-sd * hw * 0.5, 0, 0), Vector3(hw, 0.6, SEG + 0.02), T.wall * 0.45)
+		# coffers underneath
+		for k in 4:
+			Worlds.box(st, Vector3(-sd * hw * (0.15 + k * 0.22), -0.4, 0), Vector3(0.3, 0.3, SEG), T.wall2 * 0.55)
+		st.set_material(Worlds.lit_mat)
+		var m := MeshInstance3D.new()
+		m.mesh = st.commit()
+		var gs := SurfaceTool.new()
+		gs.begin(Mesh.PRIMITIVE_TRIANGLES)
+		# a line of light along the edge where the two halves meet
+		Worlds.box(gs, Vector3(-sd * (hw - 0.12), -0.32, 0), Vector3(0.2, 0.06, SEG), acc)
+		gs.set_material(Worlds.glow_mat)
+		gs.commit(m.mesh)
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		m.position = Vector3(sd * hw, 14.5, -(d0 + SEG * 0.5))
+		decor(g, m)
+		pair.append({"node": m, "sd": sd})
+	roofs.append({"parts": pair, "d": d0 + SEG * 0.5, "k": -1.0})
+
+
+## a great chandelier of glass, high up at the side of a hall: as you come it falls and smashes on the floor
+func _chandelier(d: float, sd: float) -> void:
+	var g := new_gate("chandelier", d)
+	var x := sd * randf_range(5.5, 9.0)
+	var y := randf_range(9.0, 10.5)
+	var n := Node3D.new()
+	n.position = Vector3(x, y, -d)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var gold := Color("c9a25a")
+	for i in 18:
+		var a := TAU * i / 18.0
+		Worlds.box(st, Vector3(cos(a) * 1.7, 0, sin(a) * 1.7), Vector3(0.62, 0.1, 0.1), gold)
+		Worlds.box(st, Vector3(cos(a) * 0.95, 0.7, sin(a) * 0.95), Vector3(0.36, 0.08, 0.08), gold)
+	for i in 6:
+		var a := TAU * i / 6.0
+		Worlds.box(st, Vector3(cos(a) * 0.85, 0.35, sin(a) * 0.85), Vector3(0.06, 0.8, 0.06), gold * 0.9)
+	Worlds.box(st, Vector3(0, 0.9, 0), Vector3(0.12, 1.8, 0.12), gold * 0.8)
+	st.set_material(Worlds.lit_mat)
+	var frame := MeshInstance3D.new()
+	frame.mesh = st.commit()
+	n.add_child(frame)
+	# the chain up to a beam across the hall
+	var cs := SurfaceTool.new()
+	cs.begin(Mesh.PRIMITIVE_TRIANGLES)
+	Worlds.box(cs, Vector3(x, (y + 1.8 + 14.0) * 0.5, -d), Vector3(0.06, 14.0 - y - 1.8, 0.06), Color("2b3138"))
+	Worlds.box(cs, Vector3(0, 14.0, -d), Vector3(Worlds.HALL_W * 2.0, 0.4, 0.4), Color("39424c"))
+	cs.set_material(Worlds.lit_mat)
+	var chain_m := MeshInstance3D.new()
+	chain_m.mesh = cs.commit()
+	decor(g, chain_m)
+	# drops of glass, and candle flames
+	var drops := []
+	for ring in [[1.7, 18, 0.9], [0.95, 10, 0.7], [0.0, 1, 1.6]]:
+		var rr: float = ring[0]
+		for i in int(ring[1]):
+			var a := TAU * i / float(ring[1]) + 0.1
+			var cm := MeshInstance3D.new()
+			cm.mesh = crystal_mesh
+			cm.material_override = chand_mat
+			var sc: float = ring[2]
+			cm.scale = Vector3(0.45, sc, 0.45)
+			cm.rotation.x = PI
+			cm.position = Vector3(cos(a) * rr, -0.45 * sc - 0.05, sin(a) * rr)
+			n.add_child(cm)
+			drops.append(cm)
+	var fs := SurfaceTool.new()
+	fs.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in 9:
+		var a := TAU * i / 9.0
+		Worlds.box(fs, Vector3(cos(a) * 1.7, 0.2, sin(a) * 1.7), Vector3(0.1, 0.22, 0.1), Color("ffe2a6"))
+	fs.set_material(Worlds.glow_mat)
+	var flames := MeshInstance3D.new()
+	flames.mesh = fs.commit()
+	n.add_child(flames)
+	decor(g, n)
+	chandeliers.append({"node": n, "d": d, "drops": drops, "flames": flames, "chain": chain_m, "state": 0, "v": 0.0, "spin": randf_range(-0.6, 0.6)})
+
+
+## far out in the open sky: a mountain of glass crystals floating on a rock, turning slowly
+func _crystal_mount(d: float, sd: float) -> void:
+	var g := new_gate("berg", d)
+	var w := _world_at(d)
+	var T: Dictionary = Worlds.TUNE[w]
+	var n := Node3D.new()
+	var far := randf_range(20.0, 46.0)
+	n.position = Vector3(sd * far, randf_range(-9.0, 9.0), -d)
+	var sc := randf_range(0.8, 1.5) * (0.8 + far / 60.0)
+	n.scale = Vector3.ONE * sc
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rock: Color = (T.wall as Color).lerp(Color("2a2a30"), 0.55)
+	var widths := [7.0, 5.6, 4.2, 2.8, 1.5]
+	for i in widths.size():
+		var ww: float = widths[i]
+		Worlds.box(st, Vector3(randf_range(-0.3, 0.3), -0.5 - i * 1.0, randf_range(-0.3, 0.3)), Vector3(ww, 1.05, ww * 0.85), rock * (1.0 - i * 0.09))
+	st.set_material(Worlds.lit_mat)
+	var base := MeshInstance3D.new()
+	base.mesh = st.commit()
+	base.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	n.add_child(base)
+	var count := randi_range(5, 8)
+	for i in count:
+		var cm := MeshInstance3D.new()
+		cm.mesh = column_mesh
+		cm.material_override = berg_mat
+		cm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var big := 1.0 if i == 0 else randf_range(0.35, 0.8)
+		cm.scale = Vector3(3.4, 8.0, 3.4) * big
+		cm.position = Vector3(randf_range(-2.4, 2.4) * (0.3 if i == 0 else 1.0), 0.0, randf_range(-2.0, 2.0) * (0.3 if i == 0 else 1.0))
+		cm.rotation = Vector3(randf_range(-0.45, 0.45), randf() * TAU, randf_range(-0.45, 0.45)) * (0.3 if i == 0 else 1.0)
+		n.add_child(cm)
+	# and a few hanging down under the rock
+	for i in 3:
+		var cm := MeshInstance3D.new()
+		cm.mesh = column_mesh
+		cm.material_override = berg_mat
+		cm.scale = Vector3(2.2, randf_range(2.5, 4.5), 2.2)
+		cm.position = Vector3(randf_range(-1.5, 1.5), -2.0 - i * 0.6, randf_range(-1.2, 1.2))
+		cm.rotation = Vector3(PI + randf_range(-0.3, 0.3), randf() * TAU, 0)
+		n.add_child(cm)
+	decor(g, n)
+	floaters.append({"node": n, "y": n.position.y, "ph": randf() * TAU, "w": randf_range(0.04, 0.1) * (1.0 if randf() < 0.5 else -1.0)})
+
+
+## a six-sided crystal with a pointed end, one unit tall
+func _column_shape() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var r := 0.18
+	var top := 0.78
+	var tip := Vector3(0, 1.0, 0)
+	for i in 6:
+		var a0 := TAU * i / 6.0
+		var a1 := TAU * (i + 1) / 6.0
+		var p0 := Vector3(cos(a0) * r, 0, sin(a0) * r)
+		var p1 := Vector3(cos(a1) * r, 0, sin(a1) * r)
+		var q0 := p0 + Vector3(0, top, 0)
+		var q1 := p1 + Vector3(0, top, 0)
+		var nrm := Vector3(cos((a0 + a1) * 0.5), 0, sin((a0 + a1) * 0.5))
+		st.set_normal(nrm)
+		for v in [p0, q0, q1, p0, q1, p1]:
+			st.add_vertex(v)
+		var n2 := (q1 - q0).cross(tip - q0).normalized()
+		if n2.dot(nrm) < 0.0:
+			n2 = -n2
+		st.set_normal(n2)
+		for v in [q0, tip, q1]:
+			st.add_vertex(v)
+	return st.commit()
+
+
+func _spectacle_step(dt: float) -> void:
+	# pillars coming up out of the floor
+	var i := risers.size() - 1
+	while i >= 0:
+		var r: Dictionary = risers[i]
+		if not is_instance_valid(r.node):
+			risers.remove_at(i)
+			i -= 1
+			continue
+		var m: MeshInstance3D = r.node
+		var ahead: float = r.d - dist
+		var k := clampf((46.0 + float(r.late) - ahead) / 14.0, 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - k, 3.0)
+		m.position.y = -(float(r.h) + 0.4) * (1.0 - e)
+		if k > 0.0 and not r.go:
+			r.go = true
+			fx.spark(Vector3(m.position.x, 0.1, m.position.z), Color("d8dde2"), 14, 0.7)
+		if k >= 1.0 and not r.up:
+			r.up = true
+			if absf(ahead) < 40.0:
+				sfx.play("thud", -16.0, 0.5)
+				fx.spark(Vector3(m.position.x, 0.1, m.position.z), Color("d8dde2"), 10, 0.5)
+		if r.up:
+			risers.remove_at(i)
+		i -= 1
+	# roofs swinging open
+	for rf in roofs:
+		var ahead: float = rf.d - dist
+		var k := clampf((62.0 - ahead) / 26.0, 0.0, 1.0)
+		if k == rf.k:
+			continue
+		rf.k = k
+		var e := k * k * (3.0 - 2.0 * k)
+		for part in rf.parts:
+			if is_instance_valid(part.node):
+				var pm: MeshInstance3D = part.node
+				pm.rotation.z = -float(part.sd) * e * 1.85
+	while roofs.size() and roofs[0].d < dist - 30.0:
+		roofs.pop_front()
+	# chandeliers falling
+	i = chandeliers.size() - 1
+	while i >= 0:
+		var c: Dictionary = chandeliers[i]
+		if not is_instance_valid(c.node):
+			chandeliers.remove_at(i)
+			i -= 1
+			continue
+		var n: Node3D = c.node
+		var ahead: float = c.d - dist
+		if c.state == 0 and ahead < 34.0:
+			c.state = 1
+			sfx.play("crack", -6.0, 0.7)
+			if is_instance_valid(c.chain):
+				c.chain.visible = false
+		if c.state == 1:
+			c.v = float(c.v) + 16.0 * dt
+			n.position.y -= float(c.v) * dt
+			n.rotate_y(float(c.spin) * dt)
+			n.rotation.z += dt * 0.15 * signf(n.position.x)
+			if n.position.y <= 0.15:
+				n.position.y = 0.15
+				c.state = 2
+				_chandelier_smash(c)
+		if c.state == 2:
+			chandeliers.remove_at(i)
+		i -= 1
+	# crystal mountains turning slowly
+	for f in floaters:
+		if is_instance_valid(f.node):
+			var fn: Node3D = f.node
+			fn.rotate_y(float(f.w) * dt)
+			fn.position.y = float(f.y) + sin(t * 0.4 + float(f.ph)) * 0.8
+	while floaters.size() and not is_instance_valid(floaters[0].node):
+		floaters.pop_front()
+
+
+func _chandelier_smash(c: Dictionary) -> void:
+	var n: Node3D = c.node
+	var at := n.global_position
+	for dm in c.drops:
+		var cm: MeshInstance3D = dm
+		var p := cm.global_position
+		cm.visible = false
+		for k in (2 if save.quality > 0 else 1):
+			var poly := Glass.ngon(randi_range(3, 5), randf_range(0.12, 0.28))
+			var mi := _mesh_shard(poly, "mid", -1)
+			mi.global_position = Vector3(p.x, maxf(p.y, 0.3), p.z)
+			var away := (p - at)
+			away.y = 0.0
+			var v := away.normalized() * randf_range(2.0, 6.0) + Vector3(randf_range(-1, 1), randf_range(2.0, 5.5), randf_range(-1, 1))
+			shards.append({"node": mi, "v": v, "axis": Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized(), "w": randf_range(5.0, 14.0), "life": 0.0, "mass": 0.7, "rest": false})
+	if is_instance_valid(c.flames):
+		c.flames.visible = false
+	n.rotation.x = randf_range(-0.25, 0.25)
+	fx.flash(at + Vector3(0, 0.6, 0), Color("fff0d0"), 4.0)
+	fx.spark(at + Vector3(0, 0.4, 0), Color("ffe8c0"), 60, 1.6)
+	sfx.play("heavy", -2.0, 0.8)
+	sfx.play("shatter0", -3.0, 0.9)
+	sfx.play("shatter1", -6.0, 1.15)
+	shake = maxf(shake, 0.4)
+	vibe(45)
+
+
+## the checkpoint door goes: time slows, the light flares, you are pushed through into the next world
+func _door_burst(g: GGate) -> void:
+	if g.burst:
+		return
+	g.burst = true
+	slow_until = t + 0.6
+	fov_kick = 8.0
+	shake = maxf(shake, 0.5)
+	look_fast_until = t + 3.5
+	hud.flash_screen(Color.WHITE, 0.7, 1.0)
+	if mode != "calm":
+		balls += 5
+	var c := Vector3(0, EYE, -g.d)
+	fx.flash(c, Color("ffffff"), 6.0)
+	fx.spark(c, Color("e8f6ff"), 90, 2.2)
+	sfx.play("heavy", 0.0, 0.85)
+	sfx.play("shatter0", 0.0, 0.8)
+	sfx.play("shatter1", -3.0, 1.1)
+	vibe(80)
+
+
+func _power_got(kind: String) -> void:
+	power = kind
+	power_until = t + float(POW[kind][1])
+	var col: Color = POW[kind][0]
+	hud.flash_screen(col, 0.35, 0.6)
+	fov_kick = maxf(fov_kick, 2.5)
+	sfx.play("shatter2", -3.0, 1.45)
+	sfx.play("heavy", -12.0, 1.6)
+	vibe(35)
 
 
 # ---------- testing ----------

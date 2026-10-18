@@ -35,6 +35,7 @@ var _crack_tw: Tween
 var _pulse := 0.0
 var ring: Ring
 var dots: MultiDots
+var power_badge: PowerBadge
 var title_big: Label
 var title_small: Label
 var _title_tw: Tween
@@ -322,6 +323,16 @@ func _build_hud() -> void:
 	dots.offset_bottom = -20
 	dots.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(dots)
+	# a crystal of power at work: its colour, and how much of it is left
+	power_badge = PowerBadge.new()
+	power_badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	power_badge.offset_left = -130
+	power_badge.offset_right = -30
+	power_badge.offset_top = -130
+	power_badge.offset_bottom = -30
+	power_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	power_badge.visible = false
+	hud.add_child(power_badge)
 	var pb := IconButton.new("pause", 70.0)
 	pb.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	pb.offset_left = -100
@@ -373,6 +384,15 @@ func set_balls(n: int, multi: int, infinite := false, streak := 0.0) -> void:
 	# more than one ball a throw: the ball turns gold
 	multi_label.visible = false
 	icon.modulate = Color.WHITE
+
+
+func set_power(kind: String, frac: float, col: Color) -> void:
+	power_badge.visible = kind != ""
+	if kind != power_badge.kind or absf(frac - power_badge.frac) > 0.004:
+		power_badge.kind = kind
+		power_badge.frac = frac
+		power_badge.col = col
+		power_badge.queue_redraw()
 
 
 func set_dist(d: float, progress: float) -> void:
@@ -595,6 +615,32 @@ class MultiDots extends Control:
 				var a := TAU * k / float(i + 1) - PI * 0.5
 				var p := c + (Vector2(cos(a), sin(a)) * r * 0.42 if i > 0 else Vector2.ZERO)
 				draw_circle(p, 6.0, Color(1, 1, 1, 0.95 if on else 0.4))
+
+
+## a crystal of power at work, bottom right: an hourglass (slow time), three balls, or a glowing ball of iron
+class PowerBadge extends Control:
+	var kind := ""
+	var frac := 0.0
+	var col := Color.WHITE
+
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5 - 6.0
+		draw_circle(c, r, Color(0, 0, 0, 0.35))
+		draw_arc(c, r, -PI * 0.5, -PI * 0.5 + TAU * frac, 56, col, 7.0, true)
+		match kind:
+			"slow":
+				var w := r * 0.42
+				var h := r * 0.55
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-w, -h), c + Vector2(w, -h), c]), col)
+				draw_colored_polygon(PackedVector2Array([c + Vector2(-w, h), c + Vector2(w, h), c]), col)
+			"burst":
+				for k in 3:
+					var a := TAU * k / 3.0 - PI * 0.5
+					draw_circle(c + Vector2(cos(a), sin(a)) * r * 0.33, r * 0.2, col)
+			"iron":
+				draw_circle(c, r * 0.4, col)
+				draw_arc(c, r * 0.58, 0, TAU, 40, Color(col, 0.5), 3.0, true)
 
 
 ## an on/off switch, drawn

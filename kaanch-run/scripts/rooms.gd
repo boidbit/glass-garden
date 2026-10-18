@@ -113,9 +113,17 @@ const OBS := [
 ]
 
 
-## a new world every two rooms, so the place you are in changes every half a minute or so
+## a checkpoint door every three rooms, and a new world through each door
+const CP_EVERY := 3
+
+
 static func world_of(r: int) -> String:
-	return Worlds.LIST[(posmod(r, COUNT) / 2) % Worlds.LIST.size()]
+	return Worlds.LIST[(maxi(r, 0) / CP_EVERY) % Worlds.LIST.size()]
+
+
+## is there a checkpoint door at the end of this room?
+static func has_door(r: int) -> bool:
+	return (r + 1) % CP_EVERY == 0
 
 
 static func section(r: int, local: float) -> String:

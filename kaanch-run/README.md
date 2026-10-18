@@ -7,7 +7,7 @@ You fly forward through halls of glass. Tap to throw heavy iron balls and break 
 ## Modes
 
 - **Level 1 · First Light** — a 90-second run through a stained-glass cathedral: the crypt tunnel, the great hall, out through the roof into the sky, and back in for a rose-window finale. Finishing it gives up to three stars (for accuracy and no crashes) and unlocks Endless.
-- **Endless** — 50 rooms made by hand, 200 m each; the world changes every two rooms (about every half minute): Cathedral, Venice (Murano), Lanterns, Mosaic and Sheesh Mahal, each with its own music every tenth room ends with a great wheel of glass. No room comes twice in a run; after all 50 (10 km) they come again as a remix, faster and the other way round. Doors between rooms are checkpoints. The rooms are written in `tools/rooms.py`, which checks them and writes `scripts/rooms.gd`.
+- **Endless** — 50 rooms made by hand, 200 m each; a checkpoint door comes every three rooms (600 m, a minute or more), and through each door is a new world: Cathedral, Venice (Murano), Lanterns, Mosaic and Sheesh Mahal, each with its own music. Breaking the door is a moment of its own: time slows, the light flares, you are pushed through, and you get five balls. Every tenth room ends with a great wheel of glass. No room comes twice in a run; after all 50 (10 km) they come again as a remix, faster and the other way round. The rooms are written in `tools/rooms.py`, which checks them and writes `scripts/rooms.gd`.
 - **Calm** — slower, with no penalties and unlimited marbles.
 
 ## The way
@@ -25,9 +25,17 @@ All the glass is one colour of glass: thin (tinkles), mid, thick and slab (2 hit
 
 More glass: giant cubes of glass two metres deep, blocks that slide or come crashing down from above, long pendulum blades, scissor blades, round saw blades, diagonal blades and lines of turning blades; doors of glass that open by themselves (or stick, or slide shut), shutters, revolving and button doors; chessboards of thick and thin squares, falling tiles, a turning grid, tiles that slide out of the walls, a pane with a hole in it, rings of glass to fly through, half-thin half-thick panes, dominoes, and brick walls that come down in one. Each room of the endless run is built round one of these, and in some rooms the whole room turns about you.
 
-Big panes break where the ball strikes: a hole opens and the rest stays, cracked, so you aim at the place you will pass through. Glass is one misty blue-grey with fine scratches, and comes out of the haze close in front of you. Each room starts slow past its door and gets faster towards the next. A ring round the ball count shows how near the next extra ball per throw is; balls in circles down the left show how many each throw sends.
+Big panes break where the ball strikes: a hole opens and the rest stays, cracked, so you aim at the place you will pass through. Glass is one misty blue-grey with fine scratches, and comes out of the haze close in front of you. Each stretch starts slow past its checkpoint door and gets faster towards the next. A ring round the ball count shows how near the next extra ball per throw is; balls in circles down the left show how many each throw sends.
 
 The ball is a ball of iron, about the size of a marble in your hand: it flies in a gentle curve, breaks thin glass and goes on, and knocks back off glass that holds; it never goes through glass.
+
+## Around you
+
+None of this can hurt you. Pillars come up out of the floor at the sides as you come, so the room builds itself in front of you; in the great halls the roof swings open to the sky, and a great glass chandelier comes down and smashes on the floor beside you; out in the open sky, mountains of glass crystal float on rocks, turning slowly.
+
+Glass that turns about the middle of the way runs in a steel ring held from the walls, so nothing stands where you pass; other turning glass turns on axles at the sides. Where you have to get through, only one piece of glass is in your way: falling blocks come down beside you, only the last in front of you.
+
+Now and then a crystal of power stands in place of a crystal of balls: gold slows time, green sends three balls with every throw, orange makes the ball hot iron that breaks any glass at one hit. A ring at the bottom right shows which, and how long it lasts.
 
 ## Build
 

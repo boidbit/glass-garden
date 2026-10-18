@@ -312,7 +312,7 @@ class Parts:
 		shaft.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 
-static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor", variant := 0) -> Node3D:
+static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor", variant := 0, roof := true) -> Node3D:
 	mats()
 	var P := Parts.new()
 	var rng := RandomNumberGenerator.new()
@@ -323,7 +323,7 @@ static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := 
 			"tunnel":
 				_tunnel(P, rng, z0, w)
 			"hall":
-				_hall(P, rng, z0, w)
+				_hall(P, rng, z0, w, roof)
 			"sky":
 				_sky(P, rng, z0, w)
 	if sec != prev:
@@ -835,7 +835,7 @@ static func _tunnel(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) 
 
 
 ## a great hall: a wide floor, two rows of tall columns, tall windows far off at the sides
-static func _hall(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) -> void:
+static func _hall(P: Parts, rng: RandomNumberGenerator, z0: float, w: String, roof := true) -> void:
 	var T: Dictionary = TUNE[w]
 	var acc: Color = DEFS[w].accent
 	for xi in 8:
@@ -859,8 +859,14 @@ static func _hall(P: Parts, rng: RandomNumberGenerator, z0: float, w: String) ->
 			var lc: Color = T.lights[rng.randi_range(0, T.lights.size() - 1)]
 			box(P.glow, Vector3(sd * (HALL_W + 0.15), 6.5, zc - 4.0), Vector3(0.08, 7.0, 1.6), lc * 0.8)
 			P.n_glow += 1
-	box(P.lit, Vector3(0, 14.5, z0 - SEG * 0.5), Vector3(HALL_W * 2.0 + 2.0, 0.6, SEG), T.wall * 0.4)
-	P.n_lit += 1
+	if roof:
+		box(P.lit, Vector3(0, 14.5, z0 - SEG * 0.5), Vector3(HALL_W * 2.0 + 2.0, 0.6, SEG), T.wall * 0.4)
+		P.n_lit += 1
+	else:
+		# the roof here opens as you come (the game moves it); beams stay across
+		box(P.lit, Vector3(0, 14.2, z0 - 2.0), Vector3(HALL_W * 2.0 + 2.0, 0.5, 0.5), T.wall2 * 0.6)
+		box(P.lit, Vector3(0, 14.2, z0 - 10.0), Vector3(HALL_W * 2.0 + 2.0, 0.5, 0.5), T.wall2 * 0.6)
+		P.n_lit += 2
 	# lamps hanging on long chains, and light slanting in from the windows
 	for sd in [-1.0, 1.0]:
 		var lx: float = sd * rng.randf_range(4.0, 6.5)
