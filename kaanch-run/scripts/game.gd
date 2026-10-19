@@ -1,4 +1,4 @@
-## Kaanch Run: you fly through worlds of glass; tap to throw marbles and break the glass before you reach it.
+## Glass Run: you fly through worlds of glass; tap to throw marbles and break the glass before you reach it.
 ## Running into glass costs ten marbles; jars give three. Coloured glass broken in a row makes a combo;
 ## a prism breaks all the glass of its colour ahead. Level 01 is made by hand; the endless run and the calm
 ## mode are made as you go.

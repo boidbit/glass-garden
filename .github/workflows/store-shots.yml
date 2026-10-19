@@ -2,7 +2,7 @@ name: Glass Run store shots
 
 # plays the Godot game by itself on a virtual screen and saves real gameplay frames for the Play Store listing.
 # the frames are pushed to the "store-shots" branch (not main, so the repo history stays small).
-# run it by hand (Actions -> Glass Run store shots -> Run workflow) or change this file.
+# run it by hand (Actions -> Glass Run store shots -> Run workflow) or change this file (run 2: game title is now GLASS RUN).
 
 on:
   workflow_dispatch:

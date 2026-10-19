@@ -696,7 +696,7 @@ func _wordmark(size: int) -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", -int(size * 0.28))
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var t := _label("KAANCH", title_font, size, INK, 0)
+	var t := _label("GLASS", title_font, size, INK, 0)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.add_theme_constant_override("outline_size", 0)
 	t.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
@@ -917,7 +917,7 @@ func _build_settings() -> Control:
 			reset_btn.text = "Progress reset"
 			setting_changed.emit("reset", true))
 	box.add_child(reset_btn)
-	var ver := _label("KAANCH RUN  ·  VERSION 0.4", f800, 16, Color(1, 1, 1, 0.4))
+	var ver := _label("GLASS RUN  ·  VERSION 0.4", f800, 16, Color(1, 1, 1, 0.4))
 	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(ver)
 	c[0].set_meta("rows", [])
