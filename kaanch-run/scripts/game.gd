@@ -7,12 +7,14 @@ extends Node3D
 
 const EYE := 2.2
 const ROOM_LEN := 200.0
-const START_BALLS := 25
+const START_BALLS := 30
 const SEG := Worlds.SEG
 const HALF_W := Worlds.HALF_W
 const CEIL := Worlds.CEIL
-const BALL_SPEED := 50.0
-const GRAV := 9.0
+# a heavy steel ball: slower off the hand than before, dropping in a firmer curve
+const BALL_SPEED := 38.0
+const GRAV := 13.0
+const BALL_R := 0.21
 
 enum S { MENU, PLAY, PAUSE, OVER, DONE }
 
@@ -291,8 +293,8 @@ func _make_scene() -> void:
 	fx.setup(cam, glow_tex, crack_tex)
 	# marbles: little balls of coloured glass
 	marble_mesh = SphereMesh.new()
-	marble_mesh.radius = 0.15
-	marble_mesh.height = 0.3
+	marble_mesh.radius = BALL_R
+	marble_mesh.height = BALL_R * 2.0
 	marble_mesh.radial_segments = 20
 	marble_mesh.rings = 10
 	# a ball of polished iron: the bright sky and dark ground of a chrome sphere are painted on, so it shines anywhere
@@ -635,6 +637,7 @@ func _reset(m: String, from_room := 0) -> void:
 	anims.clear()
 	shard_pool.clear()
 	risers.clear()
+	solids.clear()
 	roofs.clear()
 	chandeliers.clear()
 	floaters.clear()
@@ -1143,7 +1146,8 @@ func _jars(d: float) -> void:
 	if section_at(d) == "sky":
 		return
 	var g := new_gate("crystal", d)
-	var n := 1 + (randi() % 2)
+	# two, one each side (one ball breaks one glass, so there are more crystals than there were)
+	var n := 2 if randf() < 0.85 else 1
 	var sd := -1.0 if randf() < 0.5 else 1.0
 	for i in n:
 		var side := sd if i == 0 else -sd
@@ -1166,6 +1170,7 @@ func _jars(d: float) -> void:
 			pt.on_hit = func(): _power_got(pk)
 			continue
 		var tg := target("jar", Vector3(x, h + 0.5, -dz), 0.6)
+		jars_seen += 1
 		tg.spin = 0.0
 		tg.on_hit = func(): _jar_got(tg)
 
@@ -1195,6 +1200,7 @@ func post(g: GGate, at: Vector3) -> void:
 	m.material_override = steel_mat
 	m.position = at + Vector3(0, CEIL * 0.5, 0)
 	decor(g, m)
+	add_solid(m, Vector3.ZERO, Vector3(0.09, CEIL * 0.5, 0.09))
 
 
 ## hinges on one edge, a glowing handle on the other
@@ -1247,6 +1253,7 @@ func grille(g: GGate, d: float, button_at: Vector3) -> void:
 	m.position = Vector3(0, 0, -d)
 	decor(g, m)
 	g.grille = m
+	add_solid(m, Vector3(0, 2.2, 0), Vector3(2.45, 1.85, 0.06), g)
 	var tg := target("button", button_at, 0.42, g)
 	tg.on_hit = func(): _open_grille(g)
 
@@ -1629,7 +1636,9 @@ func _assist(dir: Vector3) -> Vector3:
 			best_a = cd[0]
 			best_pt = cd[1]
 	if best_pt == null:
-		return dir
+		# no help needed: still lift the throw for the drop, so the heavy ball lands where you tapped
+		var reach := clampf(on_glass if on_glass < INF else 20.0, 3.0, 40.0)
+		best_pt = o + dir * (reach / maxf(0.2, -dir.z))
 	var aim: Vector3 = best_pt
 	var flight := from.distance_to(aim) / (BALL_SPEED + speed)
 	aim.y += 0.5 * GRAV * flight * flight
@@ -1653,7 +1662,7 @@ func _throw(dir: Vector3) -> void:
 		mi.material_override = marble_mats[1] if power == "iron" else marble_mats[0]
 		mi.position = from
 		root3d.add_child(mi)
-		flying.append({"node": mi, "v": d2 * (BALL_SPEED + speed), "life": 0.0, "pts": [from], "col": Color(0.78, 0.82, 0.88), "shot": shot, "landed": false})
+		flying.append({"node": mi, "v": d2 * (BALL_SPEED + speed), "life": 0.0, "pts": [from], "col": Color(0.78, 0.82, 0.88), "shot": shot, "landed": false, "spent": false, "walls": 0})
 	# you feel the weight leave your hand
 	fov_kick = maxf(fov_kick, 0.6)
 	shake = maxf(shake, 0.06)
@@ -1669,22 +1678,27 @@ func _update_balls(dt: float) -> void:
 		var v: Vector3 = b.v
 		v.y -= GRAV * dt
 		var nb := a + v * dt
-		# every pane along this step, nearest first: thin glass breaks and the ball goes on,
-		# glass that holds stops it; it never passes through
-		var from := a
-		for guard in 6:
+		# one ball, one glass: the first pane this step crosses (nearest first) takes the ball.
+		# A pane that breaks stops it where it struck, and it drops through the hole; a pane that holds
+		# knocks it back. Either way the ball is spent and can never touch glass again, so it cannot
+		# go on to break the next pane behind.
+		if not b.spent:
 			var best: GPane = null
 			var best_s := 2.0
 			var best_lp := Vector2.ZERO
+			var shot: Dictionary = b.shot
 			for p in panes:
 				if not p.alive or p.opened:
 					continue
+				# the balls of one throw (two or three at once) strike one wall of glass together, never the next one behind
+				if shot.has("d") and absf(p.gate.d - float(shot.d)) > 1.0:
+					continue
 				var xf: Transform3D = p.node.global_transform
 				var pz := xf.origin.z
-				if absf(pz - from.z) > 4.5 and absf(pz - nb.z) > 4.5:
+				if absf(pz - a.z) > 4.5 and absf(pz - nb.z) > 4.5:
 					continue
 				var inv := xf.affine_inverse()
-				var la: Vector3 = inv * from
+				var la: Vector3 = inv * a
 				var lb: Vector3 = inv * nb
 				if la.z * lb.z > 0.0 or la.z == lb.z:
 					continue
@@ -1692,49 +1706,80 @@ func _update_balls(dt: float) -> void:
 				if s >= best_s:
 					continue
 				var lh := la.lerp(lb, s)
-				if not Glass.inside(p.poly, Vector2(lh.x, lh.y), 0.1):
+				if not Glass.inside(p.poly, Vector2(lh.x, lh.y), BALL_R * 0.6):
 					continue
 				best = p
 				best_s = s
 				best_lp = Vector2(lh.x, lh.y)
-			if best == null:
-				break
-			_count_hit(b)
-			var hit_at := from.lerp(nb, best_s)
-			var res := _hit(best, best_lp, v.normalized(), b)
-			if res == "break" or res == "open":
-				v *= 0.95
-				from = hit_at + v.normalized() * 0.01
-				continue
-			# it holds: the ball knocks back off it and drops
-			var nrm: Vector3 = best.node.global_transform.basis.z.normalized()
-			v = (v - 2.0 * v.dot(nrm) * nrm) * 0.25
-			nb = hit_at - nrm * signf(nrm.dot(nb - a)) * 0.05
-			break
+			if best == null and shot.has("d") and -nb.z > float(shot.d) + 1.0:
+				# a ball of the same throw that went through the hole its brother made: it is spent too
+				b.spent = true
+			if best != null:
+				_count_hit(b)
+				b.spent = true
+				if not shot.has("d"):
+					shot.d = best.gate.d
+				var hit_at := a.lerp(nb, best_s)
+				var nrm: Vector3 = best.node.global_transform.basis.z.normalized()
+				if nrm.dot(a - hit_at) < 0.0:
+					nrm = -nrm
+				var vin := v.length()
+				var thick: float = Glass.KINDS[best.kind].t
+				var res := _hit(best, best_lp, v.normalized(), b)
+				if res == "break" or res == "open":
+					# it spends itself on the glass: a little way on through the hole, then it falls
+					v = v.normalized() * minf(vin, 1.6) + Vector3(0, -0.5, 0)
+					nb = hit_at + v.normalized() * 0.03
+					shake = maxf(shake, 0.06 + minf(thick, 1.0) * 0.18)
+				elif res == "reflect":
+					# a mirror throws it back the way it came
+					v = (v - 2.0 * v.dot(nrm) * nrm) * 0.45
+					nb = hit_at + nrm * 0.06
+				else:
+					# it holds: a dull knock, the ball bounces back a little off it and drops
+					v = nrm * minf(vin * 0.1, 3.5) + Vector3(randf_range(-0.4, 0.4), -0.5, 0)
+					nb = hit_at + nrm * 0.06
+					shake = maxf(shake, 0.1)
+					sfx.play("thud", -6.0, randf_range(0.8, 0.95))
+		# solid things that are not glass (a steel grille, posts, pillars): it strikes them and glances off
+		var solid_hit := _hit_solid(a, nb, v)
+		if not solid_hit.is_empty():
+			nb = solid_hit.at
+			v = solid_hit.v
 		# round things to shoot
 		for tg in targets:
-			if not tg.alive:
+			if not tg.alive or b.spent:
 				continue
-			if _seg_dist(a, nb, tg.node.global_position) < tg.radius:
+			if _seg_dist(a, nb, tg.node.global_position) < tg.radius + BALL_R * 0.5:
 				_count_hit(b)
 				tg.alive = false
 				if tg.on_hit.is_valid():
 					tg.on_hit.call()
 				_target_burst(tg)
 		var bsec := section_at(-nb.z)
-		if nb.y < 0.2 and bsec != "sky":
+		if nb.y < BALL_R and bsec != "sky":
 			# iron does not bounce: it lands with a thud and rolls on
-			nb.y = 0.2
+			nb.y = BALL_R
 			if not b.landed and v.y < -1.0:
 				b.landed = true
 				sfx.play("roll", -14.0, randf_range(0.9, 1.1))
 			v.y = absf(v.y) * 0.06
 			v.x *= 0.92
 			v.z *= 0.97
-		var lim := INF if bsec == "sky" else (Worlds.HALL_W - 0.3 if bsec == "hall" else HALF_W - 0.13)
+		var lim := INF if bsec == "sky" else (Worlds.HALL_W - 0.1 if bsec == "hall" else HALF_W) - BALL_R
 		if absf(nb.x) > lim:
+			# the side wall: a heavy glancing knock, not a bounce like rubber
 			nb.x = signf(nb.x) * lim
-			v.x = -v.x * 0.5
+			var vx := absf(v.x)
+			v.x = -v.x * 0.3
+			v.z *= 0.82
+			if vx > 2.0 and b.walls < 2:
+				b.walls += 1
+				var wp := Vector3(signf(nb.x) * (lim + BALL_R), nb.y, nb.z)
+				fx.spark(wp, Color("d8dde2"), 8, 0.6)
+				if -nb.z - dist < 22.0:
+					shake = maxf(shake, 0.05)
+					sfx.play("thud", -12.0 + minf(vx, 8.0), randf_range(1.0, 1.2))
 		node.position = nb
 		b.v = v
 		b.life += dt
@@ -1773,8 +1818,87 @@ func _seg_dist(a: Vector3, b: Vector3, p: Vector3) -> float:
 
 
 # ---------- glass being hit ----------
+## solid things the ball can strike (not glass): each a box, kept by its node so it moves with it
+var solids: Array = []
+var hit_calls := 0
+var jars_got := 0
+var jars_seen := 0
+
+
+func add_solid(n: Node3D, center: Vector3, half: Vector3, g: GGate = null) -> void:
+	solids.append({"node": n, "c": center, "h": half, "gate": g})
+
+
+## the ball's step from a to b against every solid box (made bigger by the ball's size): where it strikes and how it glances off
+func _hit_solid(a: Vector3, b: Vector3, v: Vector3) -> Dictionary:
+	var best_t := 2.0
+	var best_n := Vector3.ZERO
+	var i := solids.size() - 1
+	while i >= 0:
+		var so: Dictionary = solids[i]
+		if not is_instance_valid(so.node):
+			solids.remove_at(i)
+			i -= 1
+			continue
+		i -= 1
+		var g = so.gate
+		if g != null and g.grille_open:
+			continue
+		var n: Node3D = so.node
+		var c: Vector3 = n.global_position + (so.c as Vector3)
+		var h: Vector3 = (so.h as Vector3) + Vector3.ONE * BALL_R
+		if absf(c.z - a.z) > h.z + 6.0:
+			continue
+		# slab test of the segment against the box
+		var t0 := 0.0
+		var t1 := 1.0
+		var nrm := Vector3.ZERO
+		var d := b - a
+		var ok := true
+		for ax in 3:
+			var lo := c[ax] - h[ax]
+			var hi := c[ax] + h[ax]
+			if absf(d[ax]) < 1e-6:
+				if a[ax] < lo or a[ax] > hi:
+					ok = false
+					break
+				continue
+			var ta := (lo - a[ax]) / d[ax]
+			var tb := (hi - a[ax]) / d[ax]
+			var face := -1.0
+			if ta > tb:
+				var tmp := ta
+				ta = tb
+				tb = tmp
+				face = 1.0
+			if ta > t0:
+				t0 = ta
+				nrm = Vector3.ZERO
+				nrm[ax] = face
+			t1 = minf(t1, tb)
+			if t0 > t1:
+				ok = false
+				break
+		if not ok or nrm == Vector3.ZERO or t0 >= best_t:
+			continue
+		best_t = t0
+		best_n = nrm
+	if best_t > 1.0:
+		return {}
+	var at := a.lerp(b, best_t) + best_n * 0.02
+	# steel on steel: most of the speed into the face is lost, some along it kept
+	var vn := v.dot(best_n)
+	var nv := (v - best_n * vn) * 0.5 - best_n * minf(absf(vn) * 0.15, 3.0) * signf(vn)
+	fx.spark(at - best_n * BALL_R, Color("ffe2b0"), 12, 0.8)
+	if -at.z - dist < 30.0:
+		shake = maxf(shake, 0.08)
+		sfx.play("thud", -4.0, randf_range(1.15, 1.3))
+	return {"at": at, "v": nv}
+
+
 ## a ball hits a pane: "break", "open", "reflect" or "hold"
 func _hit(p: GPane, lp: Vector2, dir: Vector3, _b: Dictionary) -> String:
+	hit_calls += 1
 	var hit_w: Vector3 = p.node.global_transform * Vector3(lp.x, lp.y, 0)
 	fx.spark(hit_w, Glass.look(p.kind, p.color_id)[2], 16)
 	# a ball of hot iron: any glass goes at one hit
@@ -2064,10 +2188,12 @@ func _target_burst(tg: GTarget) -> void:
 
 
 func _jar_got(_tg: GTarget) -> void:
-	balls += 3
+	jars_got += 1
+	# one ball breaks one glass now, so a crystal gives a little more
+	balls += 4
 	jar_streak += 1
 	var at := cam.unproject_position(_tg.node.global_position) if not cam.is_position_behind(_tg.node.global_position) else Vector2(640, 300)
-	hud.popup("+3", at)
+	hud.popup("+4", at)
 	var want := 3 if jar_streak >= 25 else 2 if jar_streak >= 10 else 1
 	if want > multi:
 		multi = want
@@ -2635,6 +2761,7 @@ func _riser_pair(d: float, sec: String) -> void:
 		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		m.position = Vector3(sd * hw, -h - 0.4, -d)
 		decor(g, m)
+		add_solid(m, Vector3(0, h * 0.5, 0), Vector3(wd * 0.5, h * 0.5, wd * 0.5))
 		risers.append({"node": m, "d": d, "h": h, "late": randf_range(0.0, 5.0) + (0.0 if sd < 0.0 else 2.5), "up": false, "go": false})
 
 
@@ -2937,6 +3064,159 @@ func _power_got(kind: String) -> void:
 
 
 # ---------- testing ----------
+## a bare stretch of corridor with only what a test puts in it
+func _test_room() -> void:
+	_reset("gallery")
+	mode = "gallery"
+	state = S.MENU
+	_set_world("cathedral", true)
+	for c in root3d.get_children():
+		c.queue_free()
+	segs.clear()
+	gates.clear()
+	panes.clear()
+	targets.clear()
+	flying.clear()
+	shards.clear()
+	solids.clear()
+	anims.clear()
+	dist = 0.0
+	speed = 8.0
+	next_seg = 0
+	while next_seg * SEG < 60.0:
+		root3d.add_child(Worlds.build("cathedral", next_seg * SEG, next_seg * 31 + 7))
+		next_seg += 1
+	broken = 0
+	hit_calls = 0
+	t = 2.0
+	_place_camera(0.0)
+
+
+func _fire(dir: Vector3) -> Dictionary:
+	var from := cam.position + dir * 1.3 + Vector3(0, -0.3, 0)
+	var mi := MeshInstance3D.new()
+	mi.mesh = marble_mesh
+	mi.material_override = marble_mats[0]
+	mi.position = from
+	root3d.add_child(mi)
+	var b := {"node": mi, "v": dir * (BALL_SPEED + speed), "life": 0.0, "pts": [from], "col": Color.WHITE, "shot": {"hit": false}, "landed": false, "spent": false, "walls": 0}
+	flying.append(b)
+	return b
+
+
+## aim at a point the way the game does (lifted for the drop)
+func _fire_at(p: Vector3) -> Dictionary:
+	var from := cam.position + Vector3(0, -0.3, 0)
+	var tt := (p - from).length() / (BALL_SPEED + speed)
+	return _fire((p + Vector3(0, 0.5 * GRAV * tt * tt, 0) - from).normalized())
+
+
+func _sim(sec: float) -> void:
+	var n := int(sec * 60.0)
+	for k in n:
+		t += 1.0 / 60.0
+		_move_gates()
+		_update_balls(1.0 / 60.0)
+		_run_anims(1.0 / 60.0)
+		_update_shards(1.0 / 60.0)
+
+
+func _report(name: String, ok: bool, info: String) -> void:
+	print("BALLTEST %s %s  %s" % ["PASS" if ok else "FAIL", name, info])
+
+
+func _ball_tests() -> void:
+	for i in 30:
+		await get_tree().process_frame
+	hud._hide_all()
+	var eye := Vector3(0, EYE, 0)
+	# 1. one pane
+	_test_room()
+	pane(new_gate("t", 12.0), Glass.rect(-2.4, 2.4, 0.05, 3.9), 12.0, "thin")
+	var b := _fire_at(eye + Vector3(0, 0, -12.0))
+	_sim(1.5)
+	_report("single pane", broken == 1 and hit_calls == 1 and b.spent, "broken=%d hits=%d ball_z=%.1f" % [broken, hit_calls, -b.node.position.z])
+	# 2. two panes 0.6 m apart, one behind the other
+	_test_room()
+	pane(new_gate("t", 12.0), Glass.rect(-2.4, 2.4, 0.05, 3.9), 12.0, "thin")
+	pane(new_gate("t", 12.6), Glass.rect(-2.4, 2.4, 0.05, 3.9), 12.6, "thin")
+	b = _fire_at(eye + Vector3(0, 0, -12.0))
+	_sim(1.5)
+	_report("two panes 0.6 m apart", broken == 1 and hit_calls == 1, "broken=%d hits=%d ball_z=%.1f" % [broken, hit_calls, -b.node.position.z])
+	# 3. layers and frosted, as the game builds them
+	for ty in ["layers", "frosted", "chessboard", "blocks", "collapse", "tube", "scissors"]:
+		_test_room()
+		Obstacles.build(self, ty, 12.0, 3)
+		_move_gates()
+		b = _fire_at(eye + Vector3(0, 0, -12.0))
+		_sim(1.8)
+		var linked: bool = ty in ["blocks", "collapse"]
+		_report("built: " + ty, hit_calls <= 1 and (linked or broken <= 1), "broken=%d hits=%d" % [broken, hit_calls])
+	# 4. thick glass: the first ball holds and bounces back, the second breaks it
+	_test_room()
+	var tp := pane(new_gate("t", 12.0), Glass.rect(-2.4, 2.4, 0.05, 3.9), 12.0, "thick")
+	b = _fire_at(eye + Vector3(0, 0, -12.0))
+	_sim(0.6)
+	var held: bool = tp.alive and b.spent and (b.v as Vector3).z > 0.0
+	var b2 := _fire_at(eye + Vector3(0.6, 0, -12.0))
+	_sim(1.2)
+	_report("thick: holds, then breaks", held and not tp.alive and hit_calls == 2 and broken == 1, "held=%s broken=%d hits=%d" % [held, broken, hit_calls])
+	# 5. side wall
+	_test_room()
+	b = _fire(Vector3(0.75, 0.05, -0.66).normalized())
+	var max_x := 0.0
+	for k in 60:
+		_sim(1.0 / 60.0)
+		max_x = maxf(max_x, absf(b.node.position.x))
+	_report("side wall", max_x <= HALF_W - BALL_R + 0.001 and (b.v as Vector3).x < 0.0, "max_x=%.2f vx=%.2f" % [max_x, (b.v as Vector3).x])
+	# 6. a steel grille: it cannot get through
+	_test_room()
+	var gg := new_gate("grille", 12.0)
+	grille(gg, 12.0, Vector3(2.0, 3.0, -11.8))
+	pane(new_gate("t", 14.0), Glass.rect(-2.4, 2.4, 0.05, 3.9), 14.0, "thin")
+	b = _fire_at(Vector3(-0.6, EYE, -12.0))
+	_sim(1.5)
+	_report("grille stops it", -b.node.position.z < 12.0 and broken == 0, "ball_z=%.2f broken=%d" % [-b.node.position.z, broken])
+	# 7. a miss: into the empty air
+	_test_room()
+	pane(new_gate("t", 12.0), Glass.rect(-1.0, 1.0, 0.5, 2.5), 12.0, "thin")
+	b = _fire(Vector3(-0.2, 0.5, -0.84).normalized())
+	_sim(2.5)
+	_report("miss", broken == 0 and hit_calls == 0, "broken=%d hits=%d" % [broken, hit_calls])
+	# 8. many shots, one after another, at a grid of nine: one pane each
+	_test_room()
+	var cells := []
+	var gg2 := new_gate("t", 14.0)
+	for cx in 3:
+		for cy in 3:
+			cells.append(pane(gg2, Glass.rect(-2.4 + cx * 1.6 + 0.03, -2.4 + cx * 1.6 + 1.57, 0.05 + cy * 1.135 + 0.03, 0.05 + cy * 1.135 + 1.1), 14.0, "thin"))
+	var aims := [Vector2(-1.6, 0.6), Vector2(0, 0.6), Vector2(1.6, 0.6), Vector2(-1.6, 1.75), Vector2(1.6, 1.75)]
+	for q in aims:
+		_fire_at(Vector3(q.x, q.y, -14.0))
+		_sim(0.25)
+	_sim(1.0)
+	_report("five shots at a grid", broken == 5 and hit_calls == 5, "broken=%d hits=%d" % [broken, hit_calls])
+	# 9. three balls in one throw at one pane: each ball one glass at most
+	_test_room()
+	pane(new_gate("t", 12.0), Glass.rect(-2.4, 2.4, 0.05, 3.9), 12.0, "thin")
+	pane(new_gate("t", 15.2), Glass.rect(-2.4, 2.4, 0.05, 3.9), 15.2, "thin")
+	multi = 3
+	_throw((eye + Vector3(0, 0.6, -12.0) - cam.position).normalized())
+	multi = 1
+	_sim(1.5)
+	_report("three balls, panes 3.2 m apart", hit_calls <= 3 and broken == 1, "broken=%d hits=%d" % [broken, hit_calls])
+	# speed of the frame: balls and solids
+	_test_room()
+	for k in 40:
+		_riser_pair(6.0 + k * 1.2, "corridor")
+	var t0 := Time.get_ticks_usec()
+	for k in 30:
+		_fire(Vector3(randf_range(-0.3, 0.3), 0.05, -1).normalized())
+	for k in 60:
+		_update_balls(1.0 / 60.0)
+	print("BALLTEST cost: 30 balls x 60 steps with 80 solids: %.2f ms per step" % ((Time.get_ticks_usec() - t0) / 1000.0 / 60.0))
+
+
 var _fired := {}
 
 
@@ -3016,7 +3296,7 @@ func _auto_play() -> void:
 func _test_hooks() -> void:
 	log_n += 1
 	if log_n % 120 == 0:
-		print("d=%d balls=%d crashes=%d broken=%d score=%d combo=%d shards=%d panes=%d anims=%d nodes=%d fps=%d" % [int(dist), balls, crashes, broken, score, best_combo, shards.size(), panes.size(), anims.size(), root3d.get_child_count(), Engine.get_frames_per_second()])
+		print("d=%d balls=%d crashes=%d broken=%d shots=%d jars=%d seen=%d fps=%d" % [int(dist), balls, crashes, broken, shots, jars_got, jars_seen, Engine.get_frames_per_second()])
 	if shots_at.size() and dist >= shots_at[0]:
 		var d := int(shots_at.pop_front())
 		await RenderingServer.frame_post_draw
@@ -3064,6 +3344,10 @@ func _screen_test() -> void:
 				await get_tree().process_frame
 			await RenderingServer.frame_post_draw
 			get_viewport().get_texture().get_image().save_png(shot_dir + "gal_%s.png" % ty)
+		get_tree().quit()
+		return
+	if test_screen == "balltest":
+		await _ball_tests()
 		get_tree().quit()
 		return
 	match test_screen:

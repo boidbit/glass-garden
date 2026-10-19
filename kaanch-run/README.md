@@ -27,7 +27,7 @@ More glass: giant cubes of glass two metres deep, blocks that slide or come cras
 
 Big panes break where the ball strikes: a hole opens and the rest stays, cracked, so you aim at the place you will pass through. Glass is one misty blue-grey with fine scratches, and comes out of the haze close in front of you. Each stretch starts slow past its checkpoint door and gets faster towards the next. A ring round the ball count shows how near the next extra ball per throw is; balls in circles down the left show how many each throw sends.
 
-The ball is a ball of iron, about the size of a marble in your hand: it flies in a gentle curve, breaks thin glass and goes on, and knocks back off glass that holds; it never goes through glass.
+The ball is a heavy ball of steel: it leaves your hand slower than before and drops in a firm curve (the throw is lifted for the drop, so it lands where you tap). One ball, one glass: the first pane it reaches takes it. If the pane breaks, the ball stops there and falls through the hole; if the pane holds, it knocks back off it with a dull thud. It can never go on to break a second pane behind the first, and the two or three balls of one throw strike only the one wall of glass between them. Against the side walls it glances off heavily, with a knock and a small shake; a steel grille, posts and the pillars stop it. Every pane hit is counted once; `--screen=balltest` runs the checks (one pane, panes close behind each other, thick glass, the wall, the grille, a miss, many shots, three balls).
 
 ## Around you
 
