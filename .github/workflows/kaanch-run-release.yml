@@ -7,8 +7,12 @@ name: Glass Run Play release
 on:
   workflow_dispatch:
     inputs:
+      version_name:
+        description: 'Version name players see on the store, e.g. 1.01 or 1.02'
+        required: false
+        default: '1.0'
       version_code:
-        description: 'Version code: a whole number higher than your last Play upload. Empty = the run number'
+        description: 'Version code for Play: a whole number higher than your last upload (not 1.01). Empty = automatic'
         required: false
         default: ''
 
@@ -106,14 +110,22 @@ jobs:
           touch android/.gdignore android/build/.gdignore
           chmod +x android/build/gradlew
 
-      - name: Version code
+      - name: Version name and code
         env:
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
           INPUT_VERSION_CODE: ${{ inputs.version_code }}
         run: |
+          VN="${INPUT_VERSION_NAME:-1.0}"
+          if ! [[ "$VN" =~ ^[0-9A-Za-z._-]+$ ]]; then
+            echo "::error title=Bad version name::the version name may only have letters, numbers, dots, dashes and underscores, got: $VN"
+            exit 1
+          fi
+          echo "VERSION_NAME=$VN" >> "$GITHUB_ENV"
+          sed -i "s|^version/name=.*|version/name=\"$VN\"|" kaanch-run/export_presets.cfg
           # Play needs a versionCode that goes up with every upload: the run number unless you gave one
           VC="${INPUT_VERSION_CODE:-${GITHUB_RUN_NUMBER}}"
           if ! [[ "$VC" =~ ^[0-9]+$ ]] || [ "$VC" -lt 1 ] || [ "$VC" -gt 2100000000 ]; then
-            echo "::error title=Bad version code::the version code must be a whole number from 1 to 2100000000, got: $VC"
+            echo "::error title=Bad version code::the version code must be a whole number from 1 to 2100000000 (put 1.01 in Version name instead), got: $VC"
             exit 1
           fi
           echo "VERSION_CODE=$VC" >> "$GITHUB_ENV"
@@ -165,8 +177,8 @@ jobs:
       - name: Name the files
         run: |
           mkdir -p dist
-          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${VERSION_CODE}.aab"
-          cp kaanch-run/build/GlassRun.apk "dist/GlassRun-${VERSION_CODE}.apk"
+          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${VERSION_NAME}-code${VERSION_CODE}.aab"
+          cp kaanch-run/build/GlassRun.apk "dist/GlassRun-${VERSION_NAME}-code${VERSION_CODE}.apk"
 
       - uses: actions/upload-artifact@v5
         with:
