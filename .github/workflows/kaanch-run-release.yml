@@ -1,32 +1,11 @@
 name: Glass Run Play release
 
 # builds a signed Android App Bundle (.aab) of the Godot game in kaanch-run/ for Google Play.
-# run it by hand (Actions -> Glass Run Play release -> Run workflow) or push a tag like run-v1.0.
+# run it by hand: Actions -> Glass Run Play release -> Run workflow, then download the .aab and upload it in Play Console.
 # setup and secrets: kaanch-run/RELEASE.md
 
 on:
   workflow_dispatch:
-    inputs:
-      version_name:
-        description: 'Version name shown on the store (e.g. 1.0)'
-        required: false
-        default: '1.0'
-      publish_to_play:
-        description: 'Also upload the bundle to Google Play (needs PLAY_SERVICE_ACCOUNT_JSON)'
-        type: boolean
-        default: false
-      track:
-        description: 'Play track to upload to'
-        type: choice
-        options: [internal, alpha, beta, production]
-        default: internal
-      status:
-        description: 'Release status (use draft until the app has had its first release)'
-        type: choice
-        options: [draft, completed]
-        default: draft
-  push:
-    tags: ['run-v*']
 
 permissions:
   contents: write
@@ -122,13 +101,10 @@ jobs:
           touch android/.gdignore android/build/.gdignore
           chmod +x android/build/gradlew
 
-      - name: Version
+      - name: Version code
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then NAME="${GITHUB_REF_NAME#run-v}"; else NAME="${{ inputs.version_name }}"; fi
-          NAME="${NAME:-1.0}"
-          echo "VERSION_NAME=${NAME}" >> "$GITHUB_ENV"
           # Play needs a versionCode that goes up with every upload: the run number does
-          sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/; s/^version\/name=.*/version\/name=\"${NAME}\"/" kaanch-run/export_presets.cfg
+          sed -i "s/^version/code=.*/version/code=${GITHUB_RUN_NUMBER}/" kaanch-run/export_presets.cfg
           grep -E "^version/" kaanch-run/export_presets.cfg
 
       - name: Build and sign the bundle
@@ -165,19 +141,10 @@ jobs:
       - name: Name the bundle
         run: |
           mkdir -p dist
-          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${VERSION_NAME}-${GITHUB_RUN_NUMBER}.aab"
+          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${GITHUB_RUN_NUMBER}.aab"
 
       - uses: actions/upload-artifact@v5
         with:
           name: GlassRun-aab
           path: dist/*.aab
 
-      - name: Upload to Google Play
-        if: ${{ github.event_name == 'push' || inputs.publish_to_play }}
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.boidbit.glassrun
-          releaseFiles: dist/*.aab
-          track: ${{ inputs.track || 'internal' }}
-          status: ${{ inputs.status || 'draft' }}
