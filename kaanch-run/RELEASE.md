@@ -4,11 +4,13 @@ The workflow **Glass Run Play release** (`.github/workflows/kaanch-run-release.y
 
 ## Releasing
 
-1. GitHub → **Actions** → **Glass Run Play release** → **Run workflow** → **Run workflow**. There is nothing to fill in.
-2. When it is green, open the run and download **GlassRun-aab** from *Artifacts* (a zip with the `.aab` inside).
-3. Play Console → your app → **Release** → pick a track (Internal testing first) → **Create new release** → upload the `.aab`.
+1. GitHub → **Actions** → **Glass Run Play release** → **Run workflow**.
+2. *Version code*: leave it empty to use the run number, or type a whole number higher than your last Play upload (Play refuses a version code it has seen before).
+3. When it is green, open the run and download **GlassRun-release** from *Artifacts*. The zip has two files, both signed with your upload key:
+   - `GlassRun-<code>.aab` — upload this in Play Console → your app → **Release** → Internal testing → **Create new release**.
+   - `GlassRun-<code>.apk` — install this on a phone to try the game first. It cannot update an install that came from Play (Play re-signs with its own key).
 
-The version code is the run number, so every run's bundle is newer than the last, as Play needs.
+The store listing icon is `store/app-icon-512.png` (512×512, upload it under *Store listing → App icon*).
 
 ## One-time setup (already done)
 

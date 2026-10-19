@@ -1,11 +1,16 @@
 name: Glass Run Play release
 
 # builds a signed Android App Bundle (.aab) of the Godot game in kaanch-run/ for Google Play.
-# run it by hand: Actions -> Glass Run Play release -> Run workflow, then download the .aab and upload it in Play Console.
+# run it by hand: Actions -> Glass Run Play release -> Run workflow, then download the .aab (for Play) and the .apk (to try on a phone).
 # setup and secrets: kaanch-run/RELEASE.md
 
 on:
   workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'Version code: a whole number higher than your last Play upload. Empty = the run number'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -102,12 +107,20 @@ jobs:
           chmod +x android/build/gradlew
 
       - name: Version code
+        env:
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
         run: |
-          # Play needs a versionCode that goes up with every upload: the run number does
-          sed -i "s/^version/code=.*/version/code=${GITHUB_RUN_NUMBER}/" kaanch-run/export_presets.cfg
+          # Play needs a versionCode that goes up with every upload: the run number unless you gave one
+          VC="${INPUT_VERSION_CODE:-${GITHUB_RUN_NUMBER}}"
+          if ! [[ "$VC" =~ ^[0-9]+$ ]] || [ "$VC" -lt 1 ] || [ "$VC" -gt 2100000000 ]; then
+            echo "::error title=Bad version code::the version code must be a whole number from 1 to 2100000000, got: $VC"
+            exit 1
+          fi
+          echo "VERSION_CODE=$VC" >> "$GITHUB_ENV"
+          sed -i "s|^version/code=.*|version/code=$VC|" kaanch-run/export_presets.cfg
           grep -E "^version/" kaanch-run/export_presets.cfg
 
-      - name: Build and sign the bundle
+      - name: Build and sign the bundle and the APK
         working-directory: kaanch-run
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -127,24 +140,38 @@ jobs:
             echo "::error title=Godot export failed::${msg}"
             exit 1
           fi
+          $G --headless --export-release "Android Release APK" build/GlassRun.apk 2>&1 | tee -a export.log
+          if [ ! -f build/GlassRun.apk ]; then
+            msg=$(grep -iE "error|warn|fail|went wrong" export.log | tail -40 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=Godot APK export failed::${msg}"
+            exit 1
+          fi
           ls -la build
 
-      - name: Check the bundle is signed with the upload key
+      - name: Check both are signed with the upload key
         run: |
           jarsigner -verify -certs kaanch-run/build/GlassRun.aab | tee verify.log | tail -5
           grep -q "jar verified" verify.log
-          if jarsigner -verify -certs kaanch-run/build/GlassRun.aab | grep -qi "CN=Android Debug"; then
+          if grep -qi "CN=Android Debug" verify.log; then
             echo "::error title=Debug-signed bundle::the bundle is signed with a debug key, Play will refuse it"
             exit 1
           fi
+          "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --print-certs kaanch-run/build/GlassRun.apk | tee apk-verify.log
+          if grep -qi "CN=Android Debug" apk-verify.log; then
+            echo "::error title=Debug-signed APK::the APK is signed with a debug key"
+            exit 1
+          fi
 
-      - name: Name the bundle
+      - name: Name the files
         run: |
           mkdir -p dist
-          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${GITHUB_RUN_NUMBER}.aab"
+          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${VERSION_CODE}.aab"
+          cp kaanch-run/build/GlassRun.apk "dist/GlassRun-${VERSION_CODE}.apk"
 
       - uses: actions/upload-artifact@v5
         with:
-          name: GlassRun-aab
-          path: dist/*.aab
+          name: GlassRun-release
+          path: |
+            dist/GlassRun-*.aab
+            dist/GlassRun-*.apk
 
