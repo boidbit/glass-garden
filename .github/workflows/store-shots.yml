@@ -1,0 +1,124 @@
+name: Glass Run store shots
+
+# plays the Godot game by itself on a virtual screen and saves real gameplay frames for the Play Store listing.
+# the frames are pushed to the "store-shots" branch (not main, so the repo history stays small).
+# run it by hand (Actions -> Glass Run store shots -> Run workflow) or change this file.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/store-shots.yml'
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: 4.7.2
+  WIDTH: 1920
+  HEIGHT: 1080
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: level1
+            args: --auto --mode=level1 --shots=40,150,280,400,520,640 --quit-at=650
+          - name: venice
+            args: --auto --mode=endless --from=3 --shots=630,700,770,850 --quit-at=860
+          - name: lanterns
+            args: --auto --mode=endless --from=6 --shots=1230,1300,1370,1450 --quit-at=1460
+          - name: mosaic
+            args: --auto --mode=endless --from=9 --shots=1830,1900,1970,2050 --quit-at=2060
+          - name: sheesh
+            args: --auto --mode=endless --from=12 --shots=2430,2500,2570,2650 --quit-at=2660
+          - name: screens
+            args: ''
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-editor-1
+
+      - name: Get Godot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSL -o g.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q g.zip && rm g.zip
+          ls -la
+
+      - name: Virtual screen and software OpenGL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxi6 libxrandr2 libxkbcommon0 libasound2t64 || true
+
+      - name: Import the project
+        working-directory: kaanch-run
+        run: ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --import 2>&1 | tail -15 || true
+
+      - name: Play and capture
+        working-directory: kaanch-run
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          NAME: ${{ matrix.name }}
+          ARGS: ${{ matrix.args }}
+        run: |
+          G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          OUT="${GITHUB_WORKSPACE}/out"
+          mkdir -p "$OUT"
+          run() {
+            # $1 = extra game args; capped at 40 minutes, a hang must not eat the whole job
+            timeout 2400 xvfb-run -a -s "-screen 0 ${WIDTH}x${HEIGHT}x24" \
+              "$G" --rendering-driver opengl3 --audio-driver Dummy --resolution ${WIDTH}x${HEIGHT} --fixed-fps 30 --path . \
+              -- --shot-dir="$OUT/${NAME}_" $1 2>&1 | tail -25 || true
+          }
+          if [ "$NAME" = "screens" ]; then
+            for s in menu levels done over settings; do
+              run "--screen=$s"
+            done
+          else
+            run "$ARGS"
+          fi
+          ls -la "$OUT"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: shots-${{ matrix.name }}
+          path: out/
+          if-no-files-found: warn
+
+  publish:
+    needs: capture
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: collected
+          pattern: shots-*
+          merge-multiple: true
+
+      - name: Push the frames to the store-shots branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          ls -la collected
+          cd collected
+          git init -q -b store-shots
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add .
+          git commit -q -m "Glass Run store shots from run ${GITHUB_RUN_NUMBER}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" store-shots
