@@ -1,0 +1,183 @@
+name: Glass Run Play release
+
+# builds a signed Android App Bundle (.aab) of the Godot game in kaanch-run/ for Google Play.
+# run it by hand (Actions -> Glass Run Play release -> Run workflow) or push a tag like run-v1.0.
+# setup and secrets: kaanch-run/RELEASE.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name shown on the store (e.g. 1.0)'
+        required: false
+        default: '1.0'
+      publish_to_play:
+        description: 'Also upload the bundle to Google Play (needs PLAY_SERVICE_ACCOUNT_JSON)'
+        type: boolean
+        default: false
+      track:
+        description: 'Play track to upload to'
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      status:
+        description: 'Release status (use draft until the app has had its first release)'
+        type: choice
+        options: [draft, completed]
+        default: draft
+  push:
+    tags: ['run-v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kaanch-run-release
+  cancel-in-progress: false
+
+env:
+  GODOT_VERSION: 4.7.2
+  # must match android/build/config.gradle of that Godot version
+  ANDROID_PLATFORM: android-36
+  ANDROID_BUILD_TOOLS: 36.1.0
+  ANDROID_NDK: 29.0.14206865
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check the signing secrets are set
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          for v in KEYSTORE_B64 KEY_ALIAS KEY_PASS; do
+            if [ -z "${!v}" ]; then
+              echo "::error title=Missing secret::Set ANDROID_KEYSTORE_BASE64, ANDROID_KEY_ALIAS and ANDROID_KEYSTORE_PASSWORD in Settings -> Secrets and variables -> Actions (see kaanch-run/RELEASE.md)"
+              exit 1
+            fi
+          done
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Android SDK packages
+        run: |
+          set -e
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SM" --sdk_root="$SDK" --licenses >/dev/null || true
+          "$SM" --sdk_root="$SDK" "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "build-tools;35.0.1" "cmdline-tools;latest" "cmake;3.10.2.4988404" "ndk;${ANDROID_NDK}" >/dev/null
+          echo "ANDROID_SDK=$SDK" >> "$GITHUB_ENV"
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-release-1
+
+      - name: Get Godot and its Android templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          T=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p ~/godot "$T"
+          cd ~/godot
+          curl -sSL -o g.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q g.zip && rm g.zip
+          curl -sSL -o t.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j t.tpz templates/android_source.zip templates/android_release.apk templates/version.txt -d "$T"
+          rm t.tpz
+          ls -la "$T"
+
+      - name: Editor settings (Android SDK and Java)
+        run: |
+          MINOR=$(echo "${GODOT_VERSION}" | cut -d. -f1,2)
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-${MINOR}.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_SDK}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOF
+
+      - name: Install the Android build template into the project
+        working-directory: kaanch-run
+        run: |
+          set -e
+          mkdir -p android/build
+          unzip -q -o ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip -d android/build
+          echo "${GODOT_VERSION}.stable" > android/.build_version
+          touch android/.gdignore android/build/.gdignore
+          chmod +x android/build/gradlew
+
+      - name: Version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then NAME="${GITHUB_REF_NAME#run-v}"; else NAME="${{ inputs.version_name }}"; fi
+          NAME="${NAME:-1.0}"
+          echo "VERSION_NAME=${NAME}" >> "$GITHUB_ENV"
+          # Play needs a versionCode that goes up with every upload: the run number does
+          sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/; s/^version\/name=.*/version\/name=\"${NAME}\"/" kaanch-run/export_presets.cfg
+          grep -E "^version/" kaanch-run/export_presets.cfg
+
+      - name: Build and sign the bundle
+        working-directory: kaanch-run
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEY_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          echo "$KEYSTORE_B64" | base64 -d > "${RUNNER_TEMP}/upload.keystore"
+          export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="${RUNNER_TEMP}/upload.keystore"
+          G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          mkdir -p build
+          $G --headless --import 2>&1 | tail -20 || true
+          $G --headless --export-release "Android Release" build/GlassRun.aab 2>&1 | tee export.log
+          if [ ! -f build/GlassRun.aab ]; then
+            # show the reason on the run's summary page
+            msg=$(grep -iE "error|warn|fail|went wrong" export.log | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=Godot export failed::${msg}"
+            exit 1
+          fi
+          ls -la build
+
+      - name: Check the bundle is signed with the upload key
+        run: |
+          jarsigner -verify -certs kaanch-run/build/GlassRun.aab | tee verify.log | tail -5
+          grep -q "jar verified" verify.log
+          if jarsigner -verify -certs kaanch-run/build/GlassRun.aab | grep -qi "CN=Android Debug"; then
+            echo "::error title=Debug-signed bundle::the bundle is signed with a debug key, Play will refuse it"
+            exit 1
+          fi
+
+      - name: Name the bundle
+        run: |
+          mkdir -p dist
+          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${VERSION_NAME}-${GITHUB_RUN_NUMBER}.aab"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: GlassRun-aab
+          path: dist/*.aab
+
+      - name: Upload to Google Play
+        if: ${{ github.event_name == 'push' || inputs.publish_to_play }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.boidbit.glassrun
+          releaseFiles: dist/*.aab
+          track: ${{ inputs.track || 'internal' }}
+          status: ${{ inputs.status || 'draft' }}

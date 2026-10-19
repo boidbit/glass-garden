@@ -1,10 +1,10 @@
-; Kaanch Run — a Smash Hit style glass run, made with Godot 4.3.
+; Glass Run — a Smash Hit style glass run, made with Godot 4.3.
 
 config_version=5
 
 [application]
 
-config/name="Kaanch Run"
+config/name="Glass Run"
 config/description="Break the glass. Keep moving."
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")

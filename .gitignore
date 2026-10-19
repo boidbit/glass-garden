@@ -14,3 +14,8 @@ android/capacitor-cordova-android-plugins/
 kaanch-run/.godot/
 kaanch-run/build/
 kaanch-run/export.log
+kaanch-run/android/
+*.aab
+*.jks
+*.keystore.b64
+upload.keystore
