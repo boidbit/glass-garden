@@ -1,0 +1,173 @@
+name: Glass Run shorts
+
+# makes YouTube Shorts of Glass Run (see shorts/README.md): the bot plays, each short in its own style; Godot's Movie
+# Maker records it in a tall window on a virtual screen; shorts/edit.py cuts it to music made in code.
+# Run it by hand: Actions -> Glass Run shorts -> Run workflow. The finished shorts (an .mp4 and a .txt with a title for
+# each) are in the run's "glass-run-shorts" artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: 'How many shorts'
+        type: choice
+        options: ['1', '2', '3', '4', '5', '6', '8', '10']
+        default: '3'
+      style:
+        description: 'What kind (random = a different one for each)'
+        type: choice
+        options: [random, perfect, clutch, power, tour, wheel, fail, sniper, chaos]
+        default: random
+      seed:
+        description: 'Seed, to make the same shorts again (empty = new ones)'
+        required: false
+        default: ''
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Plan the shorts
+        id: plan
+        env:
+          COUNT: ${{ inputs.count }}
+          STYLE: ${{ inputs.style }}
+          SEED: ${{ inputs.seed }}
+        run: |
+          python3 shorts/plan.py --matrix --count "$COUNT" --style "$STYLE" --seed "$SEED" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Tools for the cut
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pip install -q numpy opencv-python-headless pillow fonttools brotli
+
+      # the whole cut on made-up takes, so a mistake shows in minutes, not after an hour of recording
+      - name: Check the cut
+        run: python3 shorts/edit.py --selftest selftest --style tour,clutch
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: selftest
+          path: |
+            selftest/*/out/*.mp4
+            selftest/*/out/*.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+  short:
+    needs: plan
+    name: short ${{ matrix.n }} (${{ matrix.style }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-editor-1
+
+      - name: Get Godot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSL -o g.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q g.zip && rm g.zip
+
+      - name: Virtual screen, software OpenGL, ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxi6 libxrandr2 libxkbcommon0 libasound2t64 ffmpeg || true
+          pip install -q numpy opencv-python-headless pillow fonttools brotli
+
+      - name: Import the project
+        working-directory: kaanch-run
+        run: ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --import 2>&1 | tail -15 || true
+
+      - name: Recipe
+        env:
+          SEED: ${{ matrix.seed }}
+          STYLE: ${{ matrix.style }}
+        run: |
+          python3 shorts/plan.py --recipe --seed "$SEED" --style "$STYLE" > recipe.json
+          cat recipe.json
+
+      - name: Record the takes
+        run: python3 shorts/record.py --recipe recipe.json --out takes --godot ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+
+      - name: Cut the short
+        env:
+          N: ${{ matrix.n }}
+          STYLE: ${{ matrix.style }}
+        run: python3 shorts/edit.py --recipe recipe.json --takes takes --out out --name "$(printf 'short-%02d-%s' "$N" "$STYLE")"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: short-${{ matrix.n }}
+          path: |
+            out/*.mp4
+            out/*.txt
+            out/*.json
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: debug-${{ matrix.n }}
+          path: |
+            recipe.json
+            takes/*.jsonl
+          retention-days: 7
+          if-no-files-found: ignore
+
+  collect:
+    needs: short
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: short-*
+          path: shorts
+          merge-multiple: true
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: glass-run-shorts
+          path: |
+            shorts/*.mp4
+            shorts/*.txt
+          retention-days: 14
+          if-no-files-found: warn

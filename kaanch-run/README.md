@@ -42,3 +42,7 @@ Now and then a crystal of power stands in place of a crystal of balls: gold slow
 Every push that changes this folder builds an APK on GitHub (**Actions → Glass Run APK**) and puts it on the [run-latest release](../../../releases/tag/run-latest) as `KaanchRun.apk`. It installs next to Kaanch Ka Kamra.
 
 Run it on a computer: open this folder in Godot 4.3, or `godot --path kaanch-run`.
+
+## Shorts
+
+The game can play itself for YouTube Shorts: **Actions → Glass Run shorts** records the bot in a tall window and cuts each run to music made in code. See [shorts/README.md](../shorts/README.md).
