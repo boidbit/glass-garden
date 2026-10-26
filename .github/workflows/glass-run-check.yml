@@ -11,6 +11,9 @@ on:
       - 'kaanch-run/scripts/**'
       - '.github/workflows/glass-run-check.yml'
 
+permissions:
+  contents: write
+
 env:
   GODOT_VERSION: 4.7.2
 
@@ -56,3 +59,17 @@ jobs:
             echo "::error title=Music test did not run::no music result lines"
             exit 1
           fi
+
+      - name: Keep the logs on the check-results branch
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/results && cp kaanch-run/balltest.log kaanch-run/musictest.log /tmp/results/ 2>/dev/null || true
+          cd /tmp/results
+          git init -q -b check-results
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add .
+          git commit -q -m "Glass Run check logs from run ${GITHUB_RUN_NUMBER}" || exit 0
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" check-results
