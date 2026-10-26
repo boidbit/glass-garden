@@ -922,6 +922,7 @@ class Editor:
         return img
 
     def trans_out(self, kind, img, q, n):
+        q = min(1.0, max(0.0, q))
         if kind == "flash":
             a = q * q
             return cv2.addWeighted(img, 1.0 - a, self.white, a, 0)
@@ -934,6 +935,7 @@ class Editor:
         return img
 
     def trans_in(self, kind, img, frozen, p, n, key):
+        p = min(1.0, max(0.0, p))
         if kind == "flash":
             a = (1.0 - p) ** 1.6
             return cv2.addWeighted(img, 1.0 - a, self.white, a, 0)
@@ -1006,7 +1008,9 @@ class Editor:
                 k += 1
                 frozen = last_base
             u = units[k]
-            uu = tau - T[k]
+            # never below 0: a frame on the very start of a shot can land a hair before it (fractional powers of a
+            # negative number are complex in Python)
+            uu = max(0.0, tau - T[k])
             rd = readers.get(u.take.i)
             if rd is None:
                 rd = readers[u.take.i] = Reader(u.take)
