@@ -254,19 +254,34 @@ static func voronoi(poly: PackedVector2Array, seeds: PackedVector2Array) -> Arra
 	for i in seeds.size():
 		var cell := poly
 		var s := seeds[i]
+		var reach := _reach2(cell, s)
 		for j in seeds.size():
 			if i == j:
 				continue
 			var o := seeds[j]
 			var nrm := o - s
-			if nrm.length_squared() < 1e-8:
+			var d2 := nrm.length_squared()
+			if d2 < 1e-8:
+				continue
+			# a seed more than twice as far as the farthest corner of the piece cannot cut it: skip it
+			# (the same pieces as before, only far quicker; glass breaks in the middle of a frame)
+			if d2 >= 4.0 * reach:
 				continue
 			cell = clip(cell, nrm, nrm.dot((s + o) * 0.5))
 			if cell.size() < 3:
 				break
+			reach = _reach2(cell, s)
 		if cell.size() >= 3 and absf(area(cell)) > 0.0004:
 			cells.append(cell)
 	return cells
+
+
+## the square of the distance from a point to the farthest corner of a polygon
+static func _reach2(poly: PackedVector2Array, p: Vector2) -> float:
+	var r := 0.0
+	for q in poly:
+		r = maxf(r, p.distance_squared_to(q))
+	return r
 
 
 ## seed points for breaking: crowded round where it was hit, so small pieces there and big ones at the edges
@@ -312,33 +327,53 @@ static func slab_mesh(poly: PackedVector2Array, kind: String, rim_scale := 1.0, 
 	var t: float = K.t
 	var hz := t * 0.5
 	var n := poly.size()
+	var mesh := ArrayMesh.new()
+	if n < 3:
+		return mesh
 	var mirror := kind == "mirror"
 	var b := bounds(poly)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var uv_k := 1.0 / maxf(0.01, maxf(b.size.x, b.size.y))
 	var face: Color = L[0]
 	var side: Color = L[1]
+	# written straight into arrays, not a vertex at a time: glass is broken into pieces in the middle of a frame
+	var count := 6 * (n - 2) + 6 * n
+	var vs := PackedVector3Array()
+	var ns := PackedVector3Array()
+	var cs := PackedColorArray()
+	var us := PackedVector2Array()
+	vs.resize(count)
+	ns.resize(count)
+	cs.resize(count)
+	us.resize(count)
+	var k := 0
 	for z in [hz, -hz]:
-		st.set_color(face)
-		st.set_normal(Vector3(0, 0, signf(z)))
+		var nz := Vector3(0, 0, signf(z))
 		for i in range(1, n - 1):
 			for q in [poly[0], poly[i], poly[i + 1]]:
-				if mirror:
-					st.set_uv((q - b.position) / maxf(0.01, maxf(b.size.x, b.size.y)))
-				else:
-					st.set_uv(q / 2.2)
-				st.add_vertex(Vector3(q.x, q.y, z))
-	st.set_color(side)
+				vs[k] = Vector3(q.x, q.y, z)
+				ns[k] = nz
+				cs[k] = face
+				us[k] = (q - b.position) * uv_k if mirror else q / 2.2
+				k += 1
 	for i in n:
 		var a := poly[i]
 		var c := poly[(i + 1) % n]
 		var e := (c - a).normalized()
-		st.set_normal(Vector3(e.y, -e.x, 0))
+		var nn := Vector3(e.y, -e.x, 0)
 		for v in [Vector3(a.x, a.y, hz), Vector3(c.x, c.y, hz), Vector3(c.x, c.y, -hz), Vector3(a.x, a.y, hz), Vector3(c.x, c.y, -hz), Vector3(a.x, a.y, -hz)]:
-			st.set_uv(Vector2(0.5, 0.5))
-			st.add_vertex(v)
-	st.set_material(mirror_mat if mirror else glass_mat)
-	var mesh := st.commit()
+			vs[k] = v
+			ns[k] = nn
+			cs[k] = side
+			us[k] = Vector2(0.5, 0.5)
+			k += 1
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = vs
+	arr[Mesh.ARRAY_NORMAL] = ns
+	arr[Mesh.ARRAY_COLOR] = cs
+	arr[Mesh.ARRAY_TEX_UV] = us
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	mesh.surface_set_material(0, mirror_mat if mirror else glass_mat)
 	# the edges: a thin bright band just inside the outline, on both faces
 	var w: float = K.rim_w * rim_scale
 	var cc := centroid(poly)
@@ -346,18 +381,29 @@ static func slab_mesh(poly: PackedVector2Array, kind: String, rim_scale := 1.0, 
 	for p in poly:
 		var d := cc - p
 		inner.append(p + d.normalized() * minf(w, d.length() * 0.45))
-	var rs := SurfaceTool.new()
-	rs.begin(Mesh.PRIMITIVE_TRIANGLES)
-	rs.set_color(L[2])
+	var rv := PackedVector3Array()
+	rv.resize(12 * n)
+	var rc := PackedColorArray()
+	rc.resize(12 * n)
+	rc.fill(L[2])
+	k = 0
 	for z in [hz + 0.003, -hz - 0.003]:
 		for i in n:
 			var j := (i + 1) % n
-			rs.add_vertex(Vector3(poly[i].x, poly[i].y, z))
-			rs.add_vertex(Vector3(poly[j].x, poly[j].y, z))
-			rs.add_vertex(Vector3(inner[j].x, inner[j].y, z))
-			rs.add_vertex(Vector3(poly[i].x, poly[i].y, z))
-			rs.add_vertex(Vector3(inner[j].x, inner[j].y, z))
-			rs.add_vertex(Vector3(inner[i].x, inner[i].y, z))
-	rs.set_material(glow_rim_mat if (color_id >= 0 or kind == "blast") else rim_mat)
-	rs.commit(mesh)
+			var oi := Vector3(poly[i].x, poly[i].y, z)
+			var oj := Vector3(poly[j].x, poly[j].y, z)
+			var ij := Vector3(inner[j].x, inner[j].y, z)
+			rv[k] = oi
+			rv[k + 1] = oj
+			rv[k + 2] = ij
+			rv[k + 3] = oi
+			rv[k + 4] = ij
+			rv[k + 5] = Vector3(inner[i].x, inner[i].y, z)
+			k += 6
+	var ra := []
+	ra.resize(Mesh.ARRAY_MAX)
+	ra[Mesh.ARRAY_VERTEX] = rv
+	ra[Mesh.ARRAY_COLOR] = rc
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, ra)
+	mesh.surface_set_material(1, glow_rim_mat if (color_id >= 0 or kind == "blast") else rim_mat)
 	return mesh

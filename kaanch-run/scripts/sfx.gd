@@ -43,6 +43,7 @@ var _tension_frame := 0
 var _pulse_k := 0.0
 # making a short: no music (the video brings its own), and the heartbeat keeps time by frames
 var shorts := false
+var _quitting := false
 
 
 func _ready() -> void:
@@ -143,17 +144,48 @@ func _bus() -> void:
 
 
 func _exit_tree() -> void:
-	# let background sound building finish before the engine shuts down
+	# let background sound building finish before the engine shuts down (the music not yet begun is left for next time)
+	_quitting = true
 	for t in _tasks:
 		WorkerThreadPool.wait_for_task_completion(t)
 	_tasks.clear()
 
 
 func _make_track(key: String) -> void:
-	var w := _track(TRACKS[key])
+	var w := _kept_track(key)
+	if w == null:
+		w = _track(TRACKS[key])
+		_keep_track(key, w)
 	_mutex.lock()
 	tracks[key] = w
 	_mutex.unlock()
+
+
+# a made track is kept in the game's own folder and read back next time; raise this when the music changes
+const MUSIC_KEEP := 1
+
+
+func _track_path(key: String) -> String:
+	return "user://music_%s_%d_%d.pcm" % [key, MUSIC_KEEP, hash(TRACKS[key])]
+
+
+func _kept_track(key: String) -> AudioStreamWAV:
+	var f := FileAccess.open(_track_path(key), FileAccess.READ)
+	if f == null:
+		return null
+	var n := f.get_32()
+	var data := f.get_buffer(n)
+	if n == 0 or data.size() != n:
+		return null
+	return _wav_bytes(data, MRATE, true)
+
+
+func _keep_track(key: String, w: AudioStreamWAV) -> void:
+	var f := FileAccess.open(_track_path(key), FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_32(w.data.size())
+	f.store_buffer(w.data)
 
 
 func set_music(on: bool) -> void:
@@ -216,6 +248,11 @@ func _wav(buf: PackedFloat32Array, rate := RATE, loop := false) -> AudioStreamWA
 	b.resize(buf.size() * 2)
 	for i in buf.size():
 		b.encode_s16(i * 2, int(clampf(buf[i] * k, -1.0, 1.0) * 32000.0))
+	return _wav_bytes(b, rate, loop)
+
+
+## 16-bit mono samples as a sound
+func _wav_bytes(b: PackedByteArray, rate := RATE, loop := false) -> AudioStreamWAV:
 	var w := AudioStreamWAV.new()
 	w.format = AudioStreamWAV.FORMAT_16_BITS
 	w.mix_rate = rate
@@ -224,7 +261,7 @@ func _wav(buf: PackedFloat32Array, rate := RATE, loop := false) -> AudioStreamWA
 	if loop:
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		w.loop_begin = 0
-		w.loop_end = buf.size()
+		w.loop_end = b.size() / 2
 	return w
 
 
@@ -445,6 +482,23 @@ func _build_all() -> void:
 			hb[t0 + i] += sin(TAU * (62.0 - 22.0 * t) * t) * float(thump[1]) * exp(-t * 11.0)
 	streams["pulse"] = _wav(hb, RATE, true)
 	_ready_sfx = true
+	if not shorts:
+		_all_music()
+
+
+## every world's music, one after another, in the background as the game starts (or read back from the phone, where it
+## was kept the first time), so none of it is made in the middle of a run as you come into a new world
+func _all_music() -> void:
+	for key in TRACKS:
+		if _quitting:
+			return
+		_mutex.lock()
+		var have: bool = tracks.has(key) or _building.has(key)
+		if not have:
+			_building[key] = true
+		_mutex.unlock()
+		if not have:
+			_make_track(key)
 
 
 ## the pitch of a degree of a track's key (0 is the tonic, 7 the octave above it, -1 the note below it)

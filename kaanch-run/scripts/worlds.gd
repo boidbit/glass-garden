@@ -150,9 +150,58 @@ static func def(w: String) -> Dictionary:
 
 
 # ---------- textures, made once ----------
+# the picture is drawn by tex_image(), which only touches an Image, so a worker thread can draw it while the way
+# ahead is built (see shapes()); the material round it is made on the main thread, the first time it is shown
+static var _tex_imgs := {}
+static var _tex_lock := Mutex.new()
+
+
 static func tex_mat(w: String) -> StandardMaterial3D:
 	if tex_mats.has(w):
 		return tex_mats[w]
+	var m := _tex_material(w, tex_image(w))
+	tex_mats[w] = m
+	return m
+
+
+## the same look round a blank little picture: drawn once as the game starts, so its shader is made then (Game._warm_up)
+static func tex_like(w: String) -> StandardMaterial3D:
+	var img := Image.create(4, 4, true, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	return _tex_material(w, img)
+
+
+static func _tex_material(w: String, img: Image) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.vertex_color_use_as_albedo = true
+	m.roughness = 0.6 if w != "sheesh" else 0.25
+	if w == "sheesh":
+		m.metallic = 0.5
+	if w == "shoji":
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	m.albedo_color = _gtint if w == "shoji" else _tint
+	return m
+
+
+## a world's picture, drawn once (on whichever thread asks first)
+static func tex_image(w: String) -> Image:
+	_tex_lock.lock()
+	var img: Image = _tex_imgs.get(w)
+	_tex_lock.unlock()
+	if img != null:
+		return img
+	img = _draw_tex(w)
+	_tex_lock.lock()
+	if not _tex_imgs.has(w):
+		_tex_imgs[w] = img
+	img = _tex_imgs[w]
+	_tex_lock.unlock()
+	return img
+
+
+static func _draw_tex(w: String) -> Image:
 	var S := 256
 	var img := Image.create(S, S, false, Image.FORMAT_RGBA8)
 	if w == "mosaic":
@@ -203,18 +252,7 @@ static func tex_mat(w: String) -> StandardMaterial3D:
 				var n := 0.96 + 0.04 * sin(x * 0.7 + sin(y * 0.13) * 3.0)
 				img.set_pixel(x, y, Color("efe4cc") * n)
 	img.generate_mipmaps()
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = ImageTexture.create_from_image(img)
-	m.vertex_color_use_as_albedo = true
-	m.roughness = 0.6 if w != "sheesh" else 0.25
-	if w == "sheesh":
-		m.metallic = 0.5
-	if w == "shoji":
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	m.albedo_color = _gtint if w == "shoji" else _tint
-	tex_mats[w] = m
-	return m
+	return img
 
 
 # ---------- shapes ----------
@@ -313,7 +351,12 @@ class Parts:
 
 
 static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor", variant := 0, roof := true) -> Node3D:
-	mats()
+	return finish(shapes(w, d0, seed_v, sec, prev, variant, roof))
+
+
+## a piece of the way in two halves. shapes(): every vertex of it, as arrays, and its picture drawn, with no call
+## to the graphics server at all, so it can run on a worker thread; finish(): the mesh made from them (quick)
+static func shapes(w: String, d0: float, seed_v: int, sec := "corridor", prev := "corridor", variant := 0, roof := true) -> Dictionary:
 	var P := Parts.new()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_v
@@ -335,7 +378,17 @@ static func build(w: String, d0: float, seed_v: int, sec := "corridor", prev := 
 			_corridor(P, rng, z0, w)
 	if sec == "corridor" or sec == "hall":
 		_dress(P, rng, z0, w, variant, sec == "hall")
-	return _finish(P, w)
+	var out := {"tex_key": "shoji" if w == "lanterns" else w}
+	if P.n_lit:
+		out["lit"] = P.lit.commit_to_arrays()
+	if P.n_glow:
+		out["glow"] = P.glow.commit_to_arrays()
+	if P.n_tex:
+		out["tex"] = P.tex.commit_to_arrays()
+		tex_image(out.tex_key)
+	if P.n_shaft:
+		out["shaft"] = P.shaft.commit_to_arrays()
+	return out
 
 
 ## a room open to the sky: a floor on piers, a colonnade either side, beams across overhead, a low parapet
@@ -504,20 +557,22 @@ static func _corridor(P: Parts, rng: RandomNumberGenerator, z0: float, w: String
 			_sheesh(P, rng, z0)
 
 
-static func _finish(P: Parts, w: String) -> Node3D:
+static func finish(s: Dictionary) -> Node3D:
+	mats()
 	var mesh := ArrayMesh.new()
-	if P.n_lit:
-		P.lit.set_material(lit_mat)
-		P.lit.commit(mesh)
-	if P.n_glow:
-		P.glow.set_material(glow_mat)
-		P.glow.commit(mesh)
-	if P.n_tex:
-		P.tex.set_material(tex_mat("shoji" if w == "lanterns" else w))
-		P.tex.commit(mesh)
-	if P.n_shaft:
-		P.shaft.set_material(shaft_mat)
-		P.shaft.commit(mesh)
+	for part in ["lit", "glow", "tex", "shaft"]:
+		if not s.has(part):
+			continue
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, s[part])
+		var m: Material = lit_mat
+		match part:
+			"glow":
+				m = glow_mat
+			"tex":
+				m = tex_mat(s.tex_key)
+			"shaft":
+				m = shaft_mat
+		mesh.surface_set_material(mesh.get_surface_count() - 1, m)
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

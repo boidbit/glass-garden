@@ -47,7 +47,7 @@ var combo_n := 0
 var best_combo := 0
 
 # saved
-var save := {"best": 0, "cp": 0, "l1_done": false, "l1_stars": 0, "l1_score": 0, "sound": true, "music": true, "vibe": true, "quality": 1}
+var save := {"best": 0, "cp": 0, "l1_done": false, "l1_stars": 0, "l1_score": 0, "sound": true, "music": true, "vibe": true, "quality": 1, "fps60": true}
 
 var cam: Camera3D
 var env: Environment
@@ -212,6 +212,7 @@ func _ready() -> void:
 	_reset("menu")
 	hud.show_menu(save)
 	sfx.play_music("menu")
+	_warm_up()
 	if auto:
 		if shorts:
 			_shorts_start()
@@ -252,7 +253,7 @@ func _on_setting(key: String, value) -> void:
 			sfx.sound_on = value
 		"music":
 			sfx.set_music(value)
-		"quality":
+		"quality", "fps60":
 			_apply_quality()
 	_save()
 
@@ -260,6 +261,13 @@ func _on_setting(key: String, value) -> void:
 func _apply_quality() -> void:
 	var q: int = save.quality
 	get_viewport().msaa_3d = Viewport.MSAA_2X if q > 0 else Viewport.MSAA_DISABLED
+	# a phone draws the 3D a little under its screen's resolution (glass over glass costs a lot of pixels);
+	# the words and buttons stay sharp. Smooth draws fewer still.
+	if OS.has_feature("mobile"):
+		get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		get_viewport().scaling_3d_scale = 0.85 if q > 0 else 0.7
+	# 30 frames a second keeps a phone cooler (and so steadier) over a long run
+	Engine.max_fps = 60 if save.fps60 else 30
 	if fx:
 		fx.quality = q
 
@@ -443,6 +451,47 @@ func _make_scene() -> void:
 	mark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mark_mat.albedo_color = Color("ff5a3c")
 	mark_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	frame_mat = StandardMaterial3D.new()
+	frame_mat.albedo_color = Color("c9d1d8")
+	frame_mat.metallic = 0.6
+	frame_mat.roughness = 0.35
+
+
+## every look in the game drawn once as it starts, far off behind the sky where it cannot be seen, with and without a
+## flash of light by it: the graphics driver makes each shader now, not the first time that glass, crystal or spark
+## turns up in a run (on a phone, that first time is a stutter)
+func _warm_up() -> void:
+	var at := Node3D.new()
+	cam.add_child(at)
+	at.position = Vector3(0, 0, -235.0)
+	var sq := Glass.rect(-0.5, 0.5, -0.5, 0.5)
+	var meshes := [Glass.slab_mesh(sq, "thin"), Glass.slab_mesh(sq, "mirror"), Glass.slab_mesh(sq, "thin", 1.0, 0),
+		crystal_mesh, prism_mesh, column_mesh, jar_mesh, marble_mesh]
+	var mats := [Worlds.lit_mat, Worlds.glow_mat, Worlds.shaft_mat, Worlds.tex_like("cathedral"), Worlds.tex_like("sheesh"),
+		Worlds.tex_like("shoji"), shadow_mat, berg_mat, chand_mat, jar_mat, hub_mat, steel_mat, crack_mat, mark_mat, frame_mat,
+		fx.line_node.material_override]
+	mats.append_array(marble_mats)
+	mats.append_array(pow_mats)
+	mats.append_array(prism_mats)
+	var box := BoxMesh.new()
+	var i := 0
+	for m in meshes + mats:
+		var mi := MeshInstance3D.new()
+		if m is Mesh:
+			mi.mesh = m
+		else:
+			mi.mesh = box
+			mi.material_override = m
+		mi.position = Vector3((i % 6) * 1.2 - 3.0, floorf(i / 6.0) * 1.2 - 3.0, 0)
+		at.add_child(mi)
+		i += 1
+	var p := at.global_position
+	fx.flash(p, Color.WHITE, 0.4)
+	fx.spark(p, Color.WHITE, 6, 0.1)
+	fx.crumble(p, Basis(), Vector2(0.5, 0.5), Color.WHITE, Vector3(0, 0, -1))
+	for k in 14:
+		await get_tree().process_frame
+	at.queue_free()
 
 
 ## the look of polished iron on a sphere: light above, a dark band at the horizon, grey below
@@ -684,6 +733,8 @@ func _notification(what: int) -> void:
 # ---------- building the way ahead ----------
 func _reset(m: String, from_room := 0) -> void:
 	mode = m
+	_sec_cache.clear()
+	_seg_jobs_clear()
 	for c in root3d.get_children():
 		c.queue_free()
 	segs.clear()
@@ -771,7 +822,7 @@ func _set_world(w: String, now := false) -> void:
 			_ev("world", {"world": w, "name": Worlds.def(w).name})
 
 
-func _apply_look() -> void:
+func _apply_look(backdrop := true) -> void:
 	var k: float = look_now.sky
 	var bg: Color = look_now.bg
 	var hor: Color = bg.lerp(look_now.sky_hor, k)
@@ -783,6 +834,18 @@ func _apply_look() -> void:
 	env.fog_depth_begin = lerpf(12.0, 30.0, k)
 	env.fog_depth_end = lerpf(52.0 - look_now.fog * 300.0, 120.0, k)
 	env.fog_depth_curve = 1.4
+	if backdrop:
+		_draw_backdrop(k, bg, hor)
+	sun.light_color = look_now.sun
+	sun.light_energy = look_now.sun_e
+	Glass.rim_mat.albedo_color = look_now.rim
+	Worlds.set_tint(look_now.tint, look_now.gtint)
+	# glass edges dark against a bright room, bright against a dark one
+	Glass.rim_mat.albedo_color = Color("eef6f4") if hor.get_luminance() < 0.4 else Color("1c4a50")
+
+
+## the far wall of sky colour, with the world's skyline on it (many little shapes: drawn only when asked)
+func _draw_backdrop(k: float, bg: Color, hor: Color) -> void:
 	var top: Color = bg.lerp(look_now.sky_top, k)
 	var low: Color = bg.lerp(look_now.ground.lerp(look_now.sky_hor, 0.35), k)
 	backdrop_im.clear_surfaces()
@@ -824,37 +887,54 @@ func _apply_look() -> void:
 			for v in [Vector2(-0.5, -0.6), Vector2(0.5, -0.6), Vector2(0.5, 0.6), Vector2(-0.5, -0.6), Vector2(0.5, 0.6), Vector2(-0.5, 0.6)]:
 				backdrop_im.surface_add_vertex(Vector3(q.x + v.x, q.y + v.y, 3.0))
 	backdrop_im.surface_end()
-	sun.light_color = look_now.sun
-	sun.light_energy = look_now.sun_e
-	Glass.rim_mat.albedo_color = look_now.rim
-	Worlds.set_tint(look_now.tint, look_now.gtint)
-	# glass edges dark against a bright room, bright against a dark one
-	Glass.rim_mat.albedo_color = Color("eef6f4") if hor.get_luminance() < 0.4 else Color("1c4a50")
+
+
+var _look_n := 0
 
 
 func _look_step(dt: float) -> void:
 	var k := 1.0 - exp(-dt * (4.0 if t < look_fast_until else 1.2))
 	var changed := false
+	var moving := false
 	for key in look_to.keys():
 		var a = look_now[key]
 		var b = look_to[key]
 		if a is Color:
-			if not a.is_equal_approx(b):
-				look_now[key] = a.lerp(b, k)
+			if a != b:
 				changed = true
-		elif absf(a - b) > 1e-4:
-			look_now[key] = lerpf(a, b, k)
+				var c: Color = a.lerp(b, k)
+				# near enough is there: the look stops changing (and being redrawn) instead of creeping on for seconds
+				if absf(c.r - b.r) + absf(c.g - b.g) + absf(c.b - b.b) + absf(c.a - b.a) < 0.004:
+					c = b
+				else:
+					moving = true
+				look_now[key] = c
+		elif a != b:
 			changed = true
+			var f := lerpf(a, b, k)
+			if absf(f - b) < 0.002:
+				f = b
+			else:
+				moving = true
+			look_now[key] = f
 	if changed:
-		_apply_look()
+		# the light and fog every frame; the far backdrop a few times a second while the look moves, and when it arrives
+		_look_n += 1
+		_apply_look(not moving or _look_n % 4 == 0)
 
 
 func _stream() -> void:
+	# the walls, floor and dressing of the next few pieces of the way are shaped early on worker threads
+	# (only arrays of vertices: Worlds.shapes), so a frame only has to turn a finished one into a mesh
+	var k := next_seg
+	while k * SEG < dist + 150.0 + SEG * SEG_AHEAD:
+		if not seg_jobs.has(k):
+			_seg_job(k)
+		k += 1
 	while next_seg * SEG < dist + 150.0:
 		var d0 := next_seg * SEG
 		var sec := section_at(d0 + 1.0)
-		var prev := section_at(d0 - 1.0) if d0 >= SEG else "corridor"
-		var seg := Worlds.build(_world_at(d0 + 1.0), d0, next_seg * 7919 + 13, sec, prev, _mood_at(d0 + 2.0), not _roof_opens(d0 + 1.0))
+		var seg := _seg_take(next_seg)
 		root3d.add_child(seg)
 		segs.append({"node": seg, "d": d0})
 		if mode == "endless":
@@ -865,6 +945,46 @@ func _stream() -> void:
 	while segs.size() and segs[0].d + SEG < dist - 6.0:
 		segs[0].node.queue_free()
 		segs.pop_front()
+
+
+const SEG_AHEAD := 3
+var seg_jobs := {}   # piece number -> {"task": worker task, "out": [its shapes]}
+
+
+## what worlds.gd needs to build piece k of the way (worked out here, on the main thread)
+func _seg_args(k: int) -> Array:
+	var d0 := k * SEG
+	var sec := section_at(d0 + 1.0)
+	var prev := section_at(d0 - 1.0) if d0 >= SEG else "corridor"
+	return [_world_at(d0 + 1.0), d0, k * 7919 + 13, sec, prev, _mood_at(d0 + 2.0), not _roof_opens(d0 + 1.0)]
+
+
+func _seg_job(k: int) -> void:
+	var a := _seg_args(k)
+	var out := []
+	var task := WorkerThreadPool.add_task(func(): out.append(Worlds.shapes(a[0], a[1], a[2], a[3], a[4], a[5], a[6])), true)
+	seg_jobs[k] = {"task": task, "out": out}
+
+
+## piece k, ready: shaped ahead if it was asked for in time (it nearly always is), or shaped now
+func _seg_take(k: int) -> Node3D:
+	if not seg_jobs.has(k):
+		var a := _seg_args(k)
+		return Worlds.build(a[0], a[1], a[2], a[3], a[4], a[5], a[6])
+	var j: Dictionary = seg_jobs[k]
+	seg_jobs.erase(k)
+	WorkerThreadPool.wait_for_task_completion(j.task)
+	return Worlds.finish(j.out[0])
+
+
+func _seg_jobs_clear() -> void:
+	for k in seg_jobs:
+		WorkerThreadPool.wait_for_task_completion(seg_jobs[k].task)
+	seg_jobs.clear()
+
+
+func _exit_tree() -> void:
+	_seg_jobs_clear()
 
 
 # ---------- the shape of the way: corridor, tunnel, great hall or open sky ----------
@@ -888,10 +1008,18 @@ func _sec_raw(d: float) -> String:
 	return "corridor"
 
 
-## the same for every point of one 16 m piece
+## the same for every point of one 16 m piece (asked many times a frame, for every ball and piece of glass,
+## so each piece's answer is kept until the next run)
+var _sec_cache := {}
+
+
 func section_at(d: float) -> String:
 	var i := floori(d / SEG)
-	return _sec_raw(i * SEG + SEG * 0.5)
+	var s = _sec_cache.get(i)
+	if s == null:
+		s = _sec_raw(i * SEG + SEG * 0.5)
+		_sec_cache[i] = s
+	return s
 
 
 ## glass that is only there to be broken: on islands below the sky, on racks at the sides of a hall
@@ -2323,11 +2451,6 @@ var frame_mat: StandardMaterial3D
 ## nothing floats: every pane gets a frame, and then posts to the floor (if it stands), a rod up to a rail
 ## (if it slides), or an axle and a strut (if it turns); glass that falls from the sky only has its frame
 func mount(n0: int, type: String) -> void:
-	if frame_mat == null:
-		frame_mat = StandardMaterial3D.new()
-		frame_mat.albedo_color = Color("c9d1d8")
-		frame_mat.metallic = 0.6
-		frame_mat.roughness = 0.35
 	var falling := type in ["drop", "fall_blocks", "tile_rain"]
 	for gi in range(n0, gates.size()):
 		var g: GGate = gates[gi]

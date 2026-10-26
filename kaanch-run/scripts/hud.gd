@@ -896,6 +896,8 @@ func _build_settings() -> Control:
 	_setting_row(box, "Music", "music")
 	_setting_row(box, "Sound", "sound")
 	_setting_row(box, "Vibration", "vibe")
+	# off: 30 frames a second, for a phone that gets warm
+	_setting_row(box, "60 frames a second", "fps60")
 	var qrow := HBoxContainer.new()
 	qrow.add_theme_constant_override("separation", 10)
 	var ql := _label("Graphics", f600, 30)
