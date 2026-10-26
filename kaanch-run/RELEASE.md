@@ -1,6 +1,6 @@
 # Releasing Glass Run on Google Play
 
-The workflow **Glass Run Play release** (`.github/workflows/kaanch-run-release.yml`) builds a signed Android App Bundle (`.aab`), the only format Play takes for new apps (it won't take an APK). It uses Godot 4.7.2 so the bundle targets API 36, which Play requires for new apps and updates since 31 August 2026. The everyday APK workflow (**Kaanch Run APK**) is unchanged and still uses Godot 4.3.
+The workflow **Glass Run Play release** (`.github/workflows/kaanch-run-release.yml`) builds a signed Android App Bundle (`.aab`), the only format Play takes for new apps (it won't take an APK). It uses Godot 4.7.2 so the bundle targets API 36, which Play requires for new apps and updates since 31 August 2026. The everyday APK workflow (**Glass Run APK**) is unchanged and still uses Godot 4.3.
 
 ## Releasing
 

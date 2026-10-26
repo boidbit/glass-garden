@@ -1,4 +1,4 @@
-name: Kaanch Run APK
+name: Glass Run APK
 
 # the Godot game in kaanch-run/: built into an APK on every change, published to the "run-latest" release
 
@@ -92,6 +92,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view run-latest >/dev/null 2>&1 || gh release create run-latest --title "Kaanch Run (latest build)" --notes "The newest build of Kaanch Run, the Godot glass run." --latest=false
+          gh release view run-latest >/dev/null 2>&1 || gh release create run-latest --title "Glass Run (latest build)" --notes "The newest build of Glass Run, the Godot glass run." --latest=false
           gh release upload run-latest kaanch-run/build/KaanchRun.apk --clobber
-          gh release edit run-latest --notes "The newest build of Kaanch Run (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}). Download KaanchRun.apk and open it on your phone to install. It installs next to Kaanch Ka Kamra, it does not replace it."
+          gh release edit run-latest --notes "The newest build of Glass Run (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}). Download KaanchRun.apk and open it on your phone to install. It installs next to Kaanch Ka Kamra, it does not replace it."

@@ -1,6 +1,6 @@
-# Kaanch Run
+# Glass Run
 
-A glass-breaking run through the glass traditions of the world, made with Godot 4.3 (separate from the web game, which stays as it is).
+A glass-breaking run through the glass traditions of the world, made with Godot (4.7.2 for the Play Store build) (separate from the web game, which stays as it is).
 
 You fly forward through halls of glass. Tap to throw heavy iron balls and break the glass before you reach it. No glass takes more than two balls. Running into glass costs balls; when they run out, the run ends. The only sounds are the balls, the glass and calm music, and nothing is written on the screen while you play but the number of balls, which turns red and beats when you are running low. Crystals give balls: hit them where they stand at the sides, float on islands below the sky, or hang in the way.
 
@@ -39,6 +39,6 @@ Now and then a crystal of power stands in place of a crystal of balls: gold slow
 
 ## Build
 
-Every push that changes this folder builds an APK on GitHub (**Actions → Kaanch Run APK**) and puts it on the [run-latest release](../../../releases/tag/run-latest) as `KaanchRun.apk`. It installs next to Kaanch Ka Kamra.
+Every push that changes this folder builds an APK on GitHub (**Actions → Glass Run APK**) and puts it on the [run-latest release](../../../releases/tag/run-latest) as `KaanchRun.apk`. It installs next to Kaanch Ka Kamra.
 
 Run it on a computer: open this folder in Godot 4.3, or `godot --path kaanch-run`.
