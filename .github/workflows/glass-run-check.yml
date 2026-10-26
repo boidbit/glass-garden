@@ -20,7 +20,7 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -47,9 +47,9 @@ jobs:
         working-directory: kaanch-run
         run: |
           G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
-          for s in balltest musictest; do
+          for s in musictest balltest; do
             echo "=== $s"
-            timeout 900 $G --headless --audio-driver Dummy --path . -- --screen=$s 2>&1 | tee "$s.log" | grep -E "BALLTEST|SCRIPT ERROR|ERROR|Parse Error" || true
+            timeout 300 $G --headless --audio-driver Dummy --path . -- --screen=$s 2>&1 | tee "$s.log" | grep -E "BALLTEST|SCRIPT ERROR|ERROR|Parse Error" || true
           done
           if grep -qE "BALLTEST FAIL|SCRIPT ERROR|Parse Error" balltest.log musictest.log; then
             echo "::error title=Tests failed::see the log above"
