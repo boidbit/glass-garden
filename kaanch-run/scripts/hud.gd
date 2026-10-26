@@ -22,6 +22,7 @@ var ui_theme: Theme
 
 var root: Control
 var hud: Control
+var top_box: VBoxContainer
 var ball_label: Label
 var multi_label: Label
 var dist_label: Label
@@ -264,6 +265,7 @@ func _build_hud() -> void:
 	top.add_theme_constant_override("separation", 4)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(top)
+	top_box = top
 	var pill := PanelContainer.new()
 	pill.theme_type_variation = "Pill"
 	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -360,6 +362,15 @@ func _build_hud() -> void:
 		hud.add_child(l)
 	title_small.offset_top = 130
 	title_big.offset_top = 160
+
+
+## making a short: nothing on the screen, or only the ball count, large and lower down (clear of the phone's own buttons)
+func shorts(show_balls: bool) -> void:
+	for c in hud.get_children():
+		c.visible = show_balls and c == top_box
+	ball_label.add_theme_font_size_override("font_size", 96)
+	icon.custom_minimum_size = Vector2(72, 72)
+	top_box.offset_top = 250
 
 
 func set_balls(n: int, multi: int, infinite := false, streak := 0.0) -> void:

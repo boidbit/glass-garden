@@ -39,7 +39,10 @@ var _bpm := 88.0
 var _tasks: Array[int] = []
 var _tension := 0.0
 var _tension_at := 0
+var _tension_frame := 0
 var _pulse_k := 0.0
+# making a short: no music (the video brings its own), and the heartbeat keeps time by frames
+var shorts := false
 
 
 func _ready() -> void:
@@ -68,7 +71,7 @@ func _process(dt: float) -> void:
 	if music.playing and music.volume_db < -9.0:
 		music.volume_db = minf(-9.0, music.volume_db + dt * 25.0)
 	# the heartbeat comes up while the game says the run is going badly, and dies away when it stops saying so
-	var live := Time.get_ticks_msec() - _tension_at < 300 and music_on
+	var live := (Engine.get_process_frames() - _tension_frame < 10 if shorts else Time.get_ticks_msec() - _tension_at < 300) and music_on
 	_pulse_k += ((_tension if live else 0.0) - _pulse_k) * minf(1.0, dt * 3.0)
 	if _pulse_k > 0.02:
 		if not pulse.playing and streams.has("pulse"):
@@ -94,6 +97,8 @@ func _process(dt: float) -> void:
 
 
 func play_music(key: String) -> void:
+	if shorts:
+		return
 	_want = key
 	_mutex.lock()
 	var have := tracks.has(key) or _building.has(key)
@@ -165,6 +170,7 @@ func set_music(on: bool) -> void:
 func set_tension(k: float) -> void:
 	_tension = clampf(k, 0.0, 1.0)
 	_tension_at = Time.get_ticks_msec()
+	_tension_frame = Engine.get_process_frames()
 
 
 ## where the beat is now, 0..1
@@ -432,11 +438,11 @@ func _build_all() -> void:
 		streams["note%d" % k] = _wav(nb)
 	# a heartbeat: two soft low thumps a second
 	var hb := _buf(1.0)
-	for th in [[0.0, 1.0], [0.3, 0.6]]:
-		var t0 := int(float(th[0]) * RATE)
+	for thump in [[0.0, 1.0], [0.3, 0.6]]:
+		var t0 := int(float(thump[0]) * RATE)
 		for i in int(0.35 * RATE):
 			var t := float(i) / RATE
-			hb[t0 + i] += sin(TAU * (62.0 - 22.0 * t) * t) * float(th[1]) * exp(-t * 11.0)
+			hb[t0 + i] += sin(TAU * (62.0 - 22.0 * t) * t) * float(thump[1]) * exp(-t * 11.0)
 	streams["pulse"] = _wav(hb, RATE, true)
 	_ready_sfx = true
 

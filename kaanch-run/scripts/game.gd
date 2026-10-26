@@ -121,6 +121,24 @@ var test_from := 0
 var remix := 0          # 0 the first time through the 50 rooms, 1 the second, ...
 var log_n := 0
 
+# making shorts (see shorts/README.md): the bot plays in a tall window while Godot's Movie Maker records it,
+# and every moment worth cutting to is written down, one line each, for the editor
+var shorts := false
+var shorts_fps := 30.0
+var bot := "perfect"
+var bot_balls := -1
+var pow_rate := 0.2
+var run_seed := -1
+var hud_balls := false
+var fov_add := 4.0
+var quit_on := ""
+var quit_after := 3.0
+var max_time := 0.0
+var fail_after := 0.0
+var ev_file: FileAccess
+var ev_f0 := -1
+var quit_frame := -1
+
 
 func _ready() -> void:
 	randomize()
@@ -140,12 +158,42 @@ func _ready() -> void:
 			test_mode = a.substr(7)
 		elif a.begins_with("--from="):
 			test_from = int(a.substr(7))
+		elif a == "--shorts":
+			shorts = true
+		elif a.begins_with("--bot="):
+			bot = a.substr(6)
+		elif a.begins_with("--balls="):
+			bot_balls = int(a.substr(8))
+		elif a.begins_with("--pow="):
+			pow_rate = float(a.substr(6))
+		elif a.begins_with("--seed="):
+			run_seed = int(a.substr(7))
+		elif a == "--hud=balls":
+			hud_balls = true
+		elif a.begins_with("--fov="):
+			fov_add = float(a.substr(6))
+		elif a.begins_with("--quit-on="):
+			quit_on = a.substr(10)
+		elif a.begins_with("--quit-after="):
+			quit_after = float(a.substr(13))
+		elif a.begins_with("--max-time="):
+			max_time = float(a.substr(11))
+		elif a.begins_with("--fail-after="):
+			fail_after = float(a.substr(13))
+		elif a.begins_with("--fps="):
+			shorts_fps = float(a.substr(6))
+		elif a.begins_with("--events="):
+			ev_file = FileAccess.open(a.substr(9), FileAccess.WRITE)
 	_load()
 	cp_room = int(save.cp)
 	Glass.mats()
 	Worlds.mats()
 	_make_scene()
+	if shorts:
+		# a tall picture: the view keeps its width, so the way is as wide as on a phone held sideways
+		cam.keep_aspect = Camera3D.KEEP_WIDTH
 	sfx = Sfx.new()
+	sfx.shorts = shorts
 	add_child(sfx)
 	sfx.sound_on = save.sound
 	sfx.music_on = save.music
@@ -165,7 +213,10 @@ func _ready() -> void:
 	hud.show_menu(save)
 	sfx.play_music("menu")
 	if auto:
-		_start(test_mode if test_mode != "" else "level1", test_from)
+		if shorts:
+			_shorts_start()
+		else:
+			_start(test_mode if test_mode != "" else "level1", test_from)
 	if test_screen != "":
 		_screen_test()
 
@@ -579,6 +630,10 @@ func _to_menu() -> void:
 func _game_over() -> void:
 	state = S.OVER
 	over_t = 0.0
+	_ev("over")
+	if shorts:
+		# the video ends on the glass, not on a panel
+		return
 	if mode == "endless":
 		var d := int(dist)
 		var nb := d > int(save.best)
@@ -593,6 +648,9 @@ func _game_over() -> void:
 func _level_done() -> void:
 	state = S.DONE
 	over_t = 0.0
+	_ev("done")
+	if shorts:
+		return
 	var acc := float(hits) / maxf(1.0, float(shots))
 	var stars := 1
 	if acc >= 0.6 and crashes <= 1:
@@ -653,7 +711,10 @@ func _reset(m: String, from_room := 0) -> void:
 		seed(1701)
 		dist = 0.0
 	else:
-		randomize()
+		if run_seed >= 0:
+			seed(run_seed)
+		else:
+			randomize()
 		dist = from_room * ROOM_LEN
 	next_seg = int(floor(dist / SEG))
 	next_obs = dist + 30.0
@@ -707,6 +768,7 @@ func _set_world(w: String, now := false) -> void:
 	if mode != "menu":
 		if new_world:
 			sfx.play_music("calm" if mode == "calm" else w)
+			_ev("world", {"world": w, "name": Worlds.def(w).name})
 
 
 func _apply_look() -> void:
@@ -1162,7 +1224,7 @@ func _jars(d: float) -> void:
 		m.position = Vector3(x, 0, -dz)
 		decor(g, m)
 		# now and then a crystal of power instead: slow time, three balls a throw, or a ball of hot iron
-		if i == 0 and mode == "endless" and _room_of(d) >= 1 and randf() < 0.2:
+		if i == 0 and mode == "endless" and _room_of(d) >= 1 and randf() < pow_rate:
 			var pk: String = POW_LIST[randi() % POW_LIST.size()]
 			var pt := target("power", Vector3(x, h + 0.65, -dz), 0.7, null, POW_LIST.find(pk))
 			pt.on_hit = func(): _power_got(pk)
@@ -1289,8 +1351,10 @@ func _frame(g: GGate, d: float, acc: Color) -> void:
 
 # ---------- each frame ----------
 func _process(delta: float) -> void:
+	if shorts:
+		_shorts_step()
 	var dt := minf(delta, 1.0 / 20.0)
-	if Time.get_ticks_msec() < hitstop_until:
+	if _ms() < hitstop_until:
 		dt *= 0.08
 	if t < slow_until:
 		dt *= 0.35
@@ -1372,11 +1436,13 @@ func _process(delta: float) -> void:
 			small += "  ·  REMIX %d" % (room / Rooms.COUNT)
 		if Rooms.spins(room):
 			small += "  ·  THE ROOM TURNS"
+		_ev("room", {"room": room, "spins": Rooms.spins(room)})
 		var L: Dictionary = Worlds.look(Rooms.world_of(room), k % Rooms.PER_WORLD)
 		hud.show_title(L.name, small, (L.sun as Color).lerp(Color.WHITE, 0.3))
 	var sn := section_at(dist + 2.0)
 	if sn != sec_now:
 		sec_now = sn
+		_ev("section", {"sec": sn})
 		if sn == "sky":
 			hud.show_toast("SKY · BONUS GLASS BELOW", Hud.ACCENT, 0.5)
 		elif sn == "hall":
@@ -1450,6 +1516,8 @@ func _place_camera(dt: float) -> void:
 		roll = lerp_angle(roll, 0.0, 1.0 - exp(-dt * 1.5))
 	cam.rotation = Vector3(deg_to_rad(cam_pitch), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1 + roll)
 	cam.fov = 62.0 + clampf((speed - 9.0) * 0.8, 0.0, 6.0) + fov_kick
+	if shorts:
+		cam.fov += fov_add
 
 
 func _move_gates() -> void:
@@ -1548,6 +1616,7 @@ func _crash(hit: Array, g: GGate) -> void:
 		return
 	crashes += 1
 	balls = maxi(0, balls - 10)
+	_ev("crash")
 	jar_streak = 0
 	multi = 1
 	combo_n = 0
@@ -1652,6 +1721,7 @@ func _throw(dir: Vector3) -> void:
 	var shot := {"hit": false}
 	var from := cam.position + dir * 1.3 + Vector3(0, -0.3, 0)
 	var n_balls := 3 if power == "burst" else multi
+	_ev("throw", {"n": n_balls})
 	for i in n_balls:
 		var d2 := dir
 		if i > 0:
@@ -1998,6 +2068,7 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 	if not p.alive:
 		return
 	p.alive = false
+	_ev("break", {"kind": p.kind, "area": snappedf(absf(Glass.area(p.poly)), 0.1), "crash": crash, "door": p.gate.door, "bonus": p.bonus > 0, "quiet": quiet})
 	if not crash:
 		broken += 1
 		score += 10 * _mult()
@@ -2130,7 +2201,7 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		if p.color_id >= 0:
 			sfx.note(combo_n)
 	if not crash and area > 3.0:
-		hitstop_until = Time.get_ticks_msec() + 45
+		hitstop_until = _ms() + 45
 		fov_kick = 1.6
 		vibe(22)
 	elif not crash:
@@ -2188,6 +2259,7 @@ func _jar_got(_tg: GTarget) -> void:
 	jars_got += 1
 	# one ball breaks one glass now, so a crystal gives a little more
 	balls += 4
+	_ev("crystal")
 	jar_streak += 1
 	var at := cam.unproject_position(_tg.node.global_position) if not cam.is_position_behind(_tg.node.global_position) else Vector2(640, 300)
 	hud.popup("+4", at)
@@ -2215,6 +2287,7 @@ func break_all(list: Array, text: String, bonus: int) -> void:
 				return false)
 	balls += bonus
 	score += 30
+	_ev("chain", {"n": k})
 	hud.show_toast(text, Color("ffc861"), 0.5)
 	sfx.play("multi", -4.0)
 
@@ -2380,6 +2453,7 @@ func _frame_mesh(p: GPane) -> MeshInstance3D:
 func thump(at: Vector3) -> void:
 	if absf(-at.z - dist) > 60.0:
 		return
+	_ev("thump")
 	shake = maxf(shake, 0.45)
 	sfx.play("thud", 2.0, 0.55)
 	sfx.play("heavy", -10.0, 0.6)
@@ -2407,6 +2481,7 @@ func chain_break(list: Array, text: String, bonus: int) -> void:
 				sfx.note(n)
 			return false)
 	balls += bonus
+	_ev("chain", {"n": k})
 	hud.show_toast(text, Color("ffc861"), 0.5)
 
 
@@ -2444,18 +2519,20 @@ func _prism_fire(tg: GTarget) -> void:
 				score += 15
 			return false)
 	score += 50
+	_ev("prism", {"n": list.size()})
 	hud.show_toast("Prism · %s ×%d" % [Glass.COLOR_NAMES[c], list.size()], Glass.COLORS[c], 0.7)
 	sfx.play("prism", -1.0)
-	hitstop_until = Time.get_ticks_msec() + 60
+	hitstop_until = _ms() + 60
 	vibe(30)
 
 
 func _blast(p: GPane, at: Vector3) -> void:
+	_ev("blast")
 	fx.flash(at, Color("ff8a3c"), 5.0)
 	fx.spark(at, Color("ffb060"), 50, 1.8)
 	shake = maxf(shake, 0.5)
 	sfx.play("boom", 0.0)
-	hitstop_until = Time.get_ticks_msec() + 70
+	hitstop_until = _ms() + 70
 	var k := 0
 	for q in panes:
 		if not q.alive or q == p:
@@ -2643,6 +2720,7 @@ func finale_break(rest: Array, d: float) -> void:
 	slow_until = t + 1.2
 	score += 200
 	balls += 10
+	_ev("finale", {"n": list.size()})
 	hud.show_toast("FINALE  +10", Color("ffd36b"), 1.0)
 	hud.flash_screen(Color.WHITE, 0.4, 0.8)
 	sfx.play("checkpoint", 0.0)
@@ -3016,6 +3094,7 @@ func _chandelier_smash(c: Dictionary) -> void:
 			away.y = 0.0
 			var v := away.normalized() * randf_range(2.0, 6.0) + Vector3(randf_range(-1, 1), randf_range(2.0, 5.5), randf_range(-1, 1))
 			shards.append({"node": mi, "v": v, "axis": Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5).normalized(), "w": randf_range(5.0, 14.0), "life": 0.0, "mass": 0.7, "rest": false})
+	_ev("chandelier")
 	if is_instance_valid(c.flames):
 		c.flames.visible = false
 	n.rotation.x = randf_range(-0.25, 0.25)
@@ -3033,6 +3112,7 @@ func _door_burst(g: GGate) -> void:
 	if g.burst:
 		return
 	g.burst = true
+	_ev("door", {"to": _world_at(g.d + 10.0)})
 	slow_until = t + 0.6
 	fov_kick = 8.0
 	shake = maxf(shake, 0.5)
@@ -3052,12 +3132,69 @@ func _door_burst(g: GGate) -> void:
 func _power_got(kind: String) -> void:
 	power = kind
 	power_until = t + float(POW[kind][1])
+	_ev("power", {"kind": kind})
 	var col: Color = POW[kind][0]
 	hud.flash_screen(col, 0.35, 0.6)
 	fov_kick = maxf(fov_kick, 2.5)
 	sfx.play("shatter2", -3.0, 1.45)
 	sfx.play("heavy", -12.0, 1.6)
 	vibe(35)
+
+
+# ---------- making shorts ----------
+## the clock for the little stops when big glass breaks: real time when you play, frames when a video is made
+## (a frame takes far longer to draw then than it lasts in the video)
+func _ms() -> int:
+	if shorts:
+		return int(Engine.get_frames_drawn() * 1000.0 / shorts_fps)
+	return Time.get_ticks_msec()
+
+
+## seconds since the run began; for a video, counted in frames
+func _run_time() -> float:
+	if ev_f0 < 0:
+		return t
+	return (Engine.get_frames_drawn() - ev_f0) / shorts_fps
+
+
+## one line for the video editor: what happened, on which frame of the video, and how many balls there were
+func _ev(e: String, extra := {}) -> void:
+	if ev_file == null:
+		return
+	var f := Engine.get_frames_drawn()
+	var line := {"e": e, "f": f, "balls": balls}
+	line.merge(extra)
+	ev_file.store_line(JSON.stringify(line))
+	if e != "tick":
+		ev_file.flush()
+	if e == quit_on and quit_frame < 0:
+		quit_frame = f + int(quit_after * shorts_fps)
+
+
+func _shorts_start() -> void:
+	# wait until the sounds are made, so the first glass is heard
+	while not sfx._ready_sfx:
+		await get_tree().process_frame
+	_start(test_mode if test_mode != "" else "endless", test_from)
+	if bot_balls > 0:
+		balls = bot_balls
+	hud.shorts(hud_balls)
+	ev_f0 = Engine.get_frames_drawn()
+	_ev("start", {"mode": mode, "room": _room_of(dist), "world": world, "bot": bot})
+
+
+## how the run is going, a few times a second, and the end of the recording
+func _shorts_step() -> void:
+	if ev_f0 < 0:
+		return
+	var f := Engine.get_frames_drawn()
+	if state == S.PLAY and (f - ev_f0) % 6 == 0:
+		_ev("tick", {"v": snappedf(speed, 0.1), "sec": sec_now, "pow": power, "multi": multi})
+	if (max_time > 0.0 and f - ev_f0 >= int(max_time * shorts_fps)) or (quit_frame >= 0 and f >= quit_frame):
+		_ev("end")
+		ev_file = null
+		set_process(false)
+		get_tree().quit()
 
 
 # ---------- testing ----------
@@ -3242,10 +3379,26 @@ func _ball_tests() -> void:
 
 
 var _fired := {}
+var _skip := {}
+
+## how each bot plays (the shorts pick one): how near and how far ahead it throws at the glass in its way,
+## from how many balls up it goes for bonus glass, from how few down it takes crystals (and how keenly),
+## how keenly it goes for a crystal of power, whether it throws at any glass it sees,
+## and, once it starts losing it (--fail-after), how much glass it lets through
+const BOTS := {
+	"perfect": {"near": 3.0, "reach": 24.0, "bonus": 12, "jar_low": 9999, "jar_pull": 0.0, "power": 3.0},
+	"sniper": {"near": 3.0, "reach": 40.0, "bonus": 8, "jar_low": 9999, "jar_pull": 0.0, "power": 3.0},
+	"clutch": {"near": 2.4, "reach": 13.0, "bonus": 9999, "jar_low": 3, "jar_pull": 8.0, "power": 3.0},
+	"power": {"near": 3.0, "reach": 24.0, "bonus": 6, "jar_low": 9999, "jar_pull": 0.0, "power": 12.0},
+	"chaos": {"near": 3.0, "reach": 30.0, "bonus": 0, "jar_low": 9999, "jar_pull": 0.0, "power": 6.0, "any": true},
+	"fail": {"near": 3.0, "reach": 24.0, "bonus": 12, "jar_low": 9999, "jar_pull": 0.0, "power": 3.0, "skip": 0.55},
+}
 
 
 func _auto_play() -> void:
 	# a simple player: throws at glass in front of the eye, at jars, hubs, prisms and buttons
+	var B: Dictionary = BOTS.get(bot, BOTS.perfect)
+	var failing: bool = B.has("skip") and _run_time() >= fail_after
 	var target_pos = null
 	var key := 0
 	var best_d := 1e9
@@ -3254,7 +3407,7 @@ func _auto_play() -> void:
 			continue
 		var gz: float = p.node.global_transform.origin.z
 		var ahead := -gz - dist
-		if ahead < 3.0 or ahead > 24.0:
+		if ahead < B.near or ahead > B.reach:
 			continue
 		var xf: Transform3D = p.node.global_transform
 		var l: Vector3 = xf.affine_inverse() * Vector3(cam.position.x, EYE, gz)
@@ -3263,6 +3416,12 @@ func _auto_play() -> void:
 		var id: int = p.get_instance_id()
 		if _fired.has(id) and t - _fired[id] < 0.55:
 			continue
+		# losing it: some glass it just lets come
+		if failing:
+			if not _skip.has(id):
+				_skip[id] = randf() < B.skip
+			if _skip[id]:
+				continue
 		var aim := Vector3(cam.position.x, EYE, gz)
 		var el := Vector2(l.x, l.y)
 		if not Glass.inside(p.poly, el):
@@ -3278,13 +3437,16 @@ func _auto_play() -> void:
 			best_d = ahead
 			target_pos = aim
 			key = id
-	# bonus glass (below in the sky, at the sides of a hall), when nothing is in the way
+	# bonus glass (below in the sky, at the sides of a hall), when nothing is in the way; a wild bot throws at any glass
+	var any: bool = B.get("any", false) and balls >= 4
 	for p in panes:
-		if not p.alive or p.bonus <= 0 or balls < 12:
+		if not p.alive:
+			continue
+		if not (p.bonus > 0 and balls >= B.bonus) and not (any and not p.opened and not p.falling):
 			continue
 		var xf: Transform3D = p.node.global_transform
 		var ahead := -xf.origin.z - dist
-		if ahead < 8.0 or ahead > 26.0:
+		if ahead < 8.0 or ahead > maxf(26.0, B.reach):
 			continue
 		var id: int = p.get_instance_id()
 		if _fired.has(id) and t - _fired[id] < 1.0:
@@ -3304,7 +3466,11 @@ func _auto_play() -> void:
 		var id: int = tg.get_instance_id()
 		if _fired.has(id) and t - _fired[id] < 0.5:
 			continue
-		var bonus := 3.0 if tg.kind != "jar" else 0.0
+		if tg.kind == "jar" and (balls > B.jar_low or failing):
+			continue
+		var bonus := 3.0 if tg.kind != "jar" else float(B.jar_pull)
+		if tg.kind == "power":
+			bonus = B.power
 		if ahead - bonus < best_d:
 			best_d = ahead - bonus
 			target_pos = pos
