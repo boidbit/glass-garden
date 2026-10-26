@@ -309,7 +309,12 @@ class Editor:
         self.beat = 60.0 / self.bpm
         self.bar = 4 * self.beat
         lo, hi = math.ceil(30.0 / self.bar), math.floor(50.0 / self.bar)
-        self.bars = int(min(max(round(ed["length"] / self.bar), lo), hi))
+        # no longer than the play there is to cut it from (a cut uses about 1.2 s of play for each second):
+        # a bot that loses early leaves less, and a short padded with a still frame is a poor short
+        play = sum(t.s1 - t.s0 for t in self.takes)
+        length = min(ed["length"], max(30.0, play / 1.2))
+        self.lo_bars = lo
+        self.bars = int(min(max(math.floor(length / self.bar), lo), hi))
         self.total = self.bars * 4
         if self.ending == "fail" and not any(m.kind == "over" for t in self.takes for m in t.moments):
             self.ending = "part2"
@@ -569,6 +574,23 @@ class Editor:
             return None
         return self.clip_unit(best[1], best[2], beats, value=best[0])
 
+    def replays(self, seq, used, budget):
+        """when the play runs short: the best moments once more, in slow motion, each just after it was first seen"""
+        bigs = sorted([u for u in seq if u.kind == "moment" and u.mom is not None and u.mom.w >= BIG], key=lambda u: -u.mom.w)
+        for u in bigs[:2]:
+            room = budget - used
+            if room < 4:
+                break
+            beats = min(self.beats_for(3.2), room - room % 2)
+            rp = self.moment_unit(u.take, u.mom, beats, max(1, min(beats - 2, int(round(beats * 0.4)))), "slow")
+            if rp is None:
+                continue
+            rp.kind = "replay"
+            rp.value = 0.0
+            seq.insert(next(i for i, v in enumerate(seq) if v is u) + 1, rp)
+            used += rp.beats
+        return used
+
     def climax(self, seq):
         cands = [u for u in seq if u.mom is not None and u.impact is not None and u.kind == "moment"]
         if not cands:
@@ -633,7 +655,10 @@ class Editor:
         p_small = {"flow": 0.15, "mixed": 0.3, "hyper": 0.45}[self.pace]
         for i in range(1, len(units)):
             u, p = units[i], units[i - 1]
-            if u.kind == "end" or u.kind == "ff" or p.kind == "ff":
+            if u.kind == "replay" or p.kind == "replay":
+                # into and out of a replay: a clear break, so it reads as a replay
+                u.trans = self.r.choice([x for x in ("flash", "glitch", "zoom") if x in self.pool] or ["flash"])
+            elif u.kind == "end" or u.kind == "ff" or p.kind == "ff":
                 u.trans = "cut"
             elif u.take is p.take:
                 gap = u.span()[0] - p.span()[1]
@@ -653,9 +678,21 @@ class Editor:
         chosen, used = self.select(self.candidates(), budget, hook)
         seq, used = self.connect(chosen, used, budget, hook)
         used = self.fill(seq, used, budget, hook)
+        used = self.replays(seq, used, budget)
+        # still short of play: a shorter short (down to 30 s), so the end is never a long still
+        short = budget - used
+        if short >= 4:
+            k = min(short // 4, self.bars - self.lo_bars)
+            self.bars -= k
+            self.total -= 4 * k
         end.beats = self.total - hook.beats - used
         self.drop = self.align(hook, seq, end)
-        self.finish_end(end, seq[-1] if seq else hook)
+        last = next((u for u in reversed(seq) if u.kind != "replay"), hook)
+        over = next((m for m in last.take.moments if m.kind == "over"), None)
+        if over is not None and last.span()[1] >= over.s - 0.5:
+            # the run ran out of balls on screen: it ends as a fail, whatever end was planned
+            self.ending = "fail"
+        self.finish_end(end, last)
         units = [hook] + seq + [end]
         self.assign_trans(units)
         assert sum(u.beats for u in units) == self.total, "the shots do not add up to the length"
@@ -675,7 +712,7 @@ class Editor:
         times, worlds = [], []
         for k, u in enumerate(self.units):
             a, b = u.span()
-            for s in u.take.breaks():
+            for s in ([] if u.kind == "replay" else u.take.breaks()):
                 if a <= s <= b:
                     ut = u.out_time(s)
                     if ut is not None:
@@ -717,6 +754,9 @@ class Editor:
             t = self.T[k] + u.impact
             if free(t + 0.15, t + 1.4):
                 texts.append(Txt(t + 0.15, t + 1.4, P.WORLD_NAMES.get(u.mom.ev["to"], ""), 84, 0.36, "slam"))
+        for k, u in enumerate(self.units):
+            if u.kind == "replay" and free(self.T[k] + 0.1, self.T[k] + 1.3):
+                texts.append(Txt(self.T[k] + 0.1, self.T[k] + 1.3, "REPLAY", 64, 0.18, "pop"))
         if self.rec["style"] == "tour":
             seen = set()
             for k, u in enumerate(self.units[1:-1], 1):
@@ -730,6 +770,9 @@ class Editor:
         if self.rec["edit"]["ending"] == "fail" and self.ending != "fail":
             # the bot never lost: no "so close"
             end_txt = self.r.choice(P.ENDS["part2"])
+        elif self.ending == "fail" and self.rec["edit"]["ending"] != "fail":
+            # it ran out of balls: no "keep going?"
+            end_txt = self.r.choice(P.ENDS["fail"])
         for k, v in fill.items():
             end_txt = end_txt.replace("{%s}" % k, str(v))
         if end_txt:
@@ -757,6 +800,10 @@ class Editor:
                 cues.append({"t": self.cl_t, "type": "reverse", "gain": 0.3})
             if self.ending == "fail" and self.cl.mom.kind in ("over", "crash"):
                 cues.append({"t": self.cl_t + 0.15, "type": "tapestop", "dur": 0.9})
+        if self.ending == "fail" and not any(c["type"] == "tapestop" for c in cues):
+            # the music winds down as the last picture stops
+            e = self.units[-1]
+            cues.append({"t": self.T[-2] + e.dur - e.freeze, "type": "tapestop", "dur": 0.9})
         return cues
 
     # ---------- sound ----------

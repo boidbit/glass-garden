@@ -23,6 +23,7 @@ var ui_theme: Theme
 var root: Control
 var hud: Control
 var top_box: VBoxContainer
+var _shorts := false
 var ball_label: Label
 var multi_label: Label
 var dist_label: Label
@@ -366,6 +367,7 @@ func _build_hud() -> void:
 
 ## making a short: nothing on the screen, or only the ball count, large and lower down (clear of the phone's own buttons)
 func shorts(show_balls: bool) -> void:
+	_shorts = true
 	for c in hud.get_children():
 		c.visible = show_balls and c == top_box
 	ball_label.add_theme_font_size_override("font_size", 96)
@@ -398,7 +400,8 @@ func set_balls(n: int, multi: int, infinite := false, streak := 0.0) -> void:
 
 
 func set_power(kind: String, frac: float, col: Color) -> void:
-	power_badge.visible = kind != ""
+	# (never in a short: nothing on the screen there but, when asked, the ball count)
+	power_badge.visible = kind != "" and not _shorts
 	if kind != power_badge.kind or absf(frac - power_badge.frac) > 0.004:
 		power_badge.kind = kind
 		power_badge.frac = frac
