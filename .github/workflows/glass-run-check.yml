@@ -1,0 +1,58 @@
+name: Glass Run checks
+
+# runs the game's own tests with no screen: the ball and glass checks, and that all the music is made and joins up.
+# any line that says FAIL fails the run.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'kaanch-run/scripts/**'
+      - '.github/workflows/glass-run-check.yml'
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-editor-1
+
+      - name: Get Godot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSL -o g.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q g.zip && rm g.zip
+
+      - name: Import the project
+        working-directory: kaanch-run
+        run: ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --import 2>&1 | tail -15 || true
+
+      - name: Tests
+        working-directory: kaanch-run
+        run: |
+          G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          for s in balltest musictest; do
+            echo "=== $s"
+            timeout 900 $G --headless --audio-driver Dummy --path . -- --screen=$s 2>&1 | tee "$s.log" | grep -E "BALLTEST|SCRIPT ERROR|ERROR|Parse Error" || true
+          done
+          if grep -qE "BALLTEST FAIL|SCRIPT ERROR|Parse Error" balltest.log musictest.log; then
+            echo "::error title=Tests failed::see the log above"
+            exit 1
+          fi
+          if ! grep -q "music cathedral" musictest.log; then
+            echo "::error title=Music test did not run::no music result lines"
+            exit 1
+          fi

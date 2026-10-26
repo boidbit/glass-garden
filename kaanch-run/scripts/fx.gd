@@ -1,5 +1,5 @@
 ## Little effects: sparks and glitter where glass is hit, glass bursting into cubes, a flash of light,
-## cracks spreading, trails behind the balls and beams of light from a prism. Made once and reused.
+## trails behind the balls and beams of light from a prism. Made once and reused.
 class_name Fx
 extends Node3D
 
@@ -12,13 +12,10 @@ var light: OmniLight3D
 var lines: ImmediateMesh
 var line_node: MeshInstance3D
 var beams: Array = []
-var cracks: Array = []
-var crack_mat: StandardMaterial3D
-var crack_quad: QuadMesh
 var quality := 1
 
 
-func setup(camera: Camera3D, glow: Texture2D, crack_tex: Texture2D) -> void:
+func setup(camera: Camera3D, glow: Texture2D) -> void:
 	cam = camera
 	var spark_mat := StandardMaterial3D.new()
 	spark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -108,13 +105,6 @@ func setup(camera: Camera3D, glow: Texture2D, crack_tex: Texture2D) -> void:
 	line_node.material_override = lm
 	line_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(line_node)
-	crack_mat = StandardMaterial3D.new()
-	crack_mat.albedo_texture = crack_tex
-	crack_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	crack_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	crack_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	crack_quad = QuadMesh.new()
-	crack_quad.size = Vector2(1, 1)
 
 
 func spark(pos: Vector3, col: Color, n := 28, speed := 1.0) -> void:
@@ -148,17 +138,6 @@ func flash(pos: Vector3, col: Color, energy := 2.5) -> void:
 	light.visible = true
 
 
-## a crack that spreads fast over a pane at the moment it goes
-func crack_burst(xf: Transform3D, size: float) -> void:
-	var m := MeshInstance3D.new()
-	m.mesh = crack_quad
-	m.material_override = crack_mat
-	add_child(m)
-	m.global_transform = xf
-	m.rotate_object_local(Vector3(0, 0, 1), randf() * TAU)
-	cracks.append({"node": m, "t": 0.0, "size": size})
-
-
 func beam(a: Vector3, b: Vector3, col: Color, life := 0.6, width := 0.07) -> void:
 	beams.append({"a": a, "b": b, "c": col, "t": 0.0, "life": life, "w": width})
 
@@ -186,25 +165,12 @@ func _quad_line(a: Vector3, b: Vector3, w0: float, w1: float, c0: Color, c1: Col
 	lines.surface_add_vertex(a1)
 
 
-## each frame: the light fades, cracks grow and fade, trails and beams are drawn
+## each frame: the light fades, trails and beams are drawn
 func step(dt: float, trails: Array) -> void:
 	if light.visible:
 		light.light_energy *= exp(-dt * 14.0)
 		if light.light_energy < 0.05:
 			light.visible = false
-	var i := cracks.size() - 1
-	while i >= 0:
-		var c: Dictionary = cracks[i]
-		c.t += dt
-		var k: float = c.t / 0.3
-		var n: MeshInstance3D = c.node
-		var s: float = c.size * (0.3 + 0.7 * minf(1.0, k * 2.5))
-		n.scale = Vector3(s, s, 1)
-		n.transparency = clampf((k - 0.5) * 2.0, 0.0, 1.0)
-		if k >= 1.0:
-			n.queue_free()
-			cracks.remove_at(i)
-		i -= 1
 	lines.clear_surfaces()
 	var any := false
 	for tr in trails:

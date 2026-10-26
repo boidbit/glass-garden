@@ -290,7 +290,7 @@ func _make_scene() -> void:
 	add_child(dust)
 	fx = Fx.new()
 	add_child(fx)
-	fx.setup(cam, glow_tex, crack_tex)
+	fx.setup(cam, glow_tex)
 	# marbles: little balls of coloured glass
 	marble_mesh = SphereMesh.new()
 	marble_mesh.radius = BALL_R
@@ -707,8 +707,6 @@ func _set_world(w: String, now := false) -> void:
 	if mode != "menu":
 		if new_world:
 			sfx.play_music("calm" if mode == "calm" else w)
-		# each room plays its world's music in a key of its own
-		sfx.set_pitch([1.0, 0.944, 1.0595, 1.0, 1.122, 0.891, 1.0595, 1.0, 0.944, 1.0][m])
 
 
 func _apply_look() -> void:
@@ -1404,6 +1402,7 @@ func _hud_all() -> void:
 	elif multi == 2:
 		streak = (jar_streak - 10) / 15.0
 	hud.set_balls(balls, multi, mode == "calm", streak)
+	sfx.set_tension(0.0 if mode == "calm" else clampf((10.0 - balls) / 10.0, 0.0, 1.0))
 	var prog := 0.0
 	if mode == "level1":
 		prog = dist / Levels.L1_LEN
@@ -2116,8 +2115,6 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 	while shards.size() > cap:
 		var s: Dictionary = shards.pop_front()
 		_free_shard(s.node)
-	if area > 2.5:
-		fx.crack_burst(Transform3D(xf.basis, hit_w + xf.basis.z * 0.05), sqrt(area) * 1.6)
 	fx.flash(hit_w, L[2], 1.5 + minf(area, 6.0) * 0.4)
 	fx.spark(hit_w, L[2], 22 + int(minf(area, 8.0) * 4), 1.2)
 	if not quiet:
@@ -3125,6 +3122,33 @@ func _report(name: String, ok: bool, info: String) -> void:
 	print("BALLTEST %s %s  %s" % ["PASS" if ok else "FAIL", name, info])
 
 
+## makes every track and checks the loops: they are made, are not silent, and join up at the end
+func _music_tests() -> void:
+	var t0 := Time.get_ticks_msec()
+	for k in Sfx.TRACKS.keys():
+		sfx.play_music(k)
+	while (sfx.tracks.size() < Sfx.TRACKS.size() or not sfx._ready_sfx) and Time.get_ticks_msec() - t0 < 180000:
+		await get_tree().process_frame
+	print("BALLTEST INFO all the music made in %d ms" % (Time.get_ticks_msec() - t0))
+	_report("heartbeat", sfx.streams.has("pulse"), "")
+	for k in Sfx.TRACKS.keys():
+		var w: AudioStreamWAV = sfx.tracks.get(k)
+		if w == null:
+			_report("music " + k, false, "not made")
+			continue
+		var d := w.data
+		var n := d.size() / 2
+		var sq := 0.0
+		var peak := 0
+		for i in n:
+			var s := d.decode_s16(i * 2)
+			sq += float(s) * s
+			peak = maxi(peak, absi(s))
+		var rms := sqrt(sq / n) / 32000.0
+		var seam := absf(float(d.decode_s16((n - 1) * 2) - d.decode_s16(0))) / 32000.0
+		_report("music " + k, rms > 0.03 and peak > 20000 and seam < 0.15, "%.1f s, rms %.3f, peak %d, seam %.4f" % [float(n) / Sfx.MRATE, rms, peak, seam])
+
+
 func _ball_tests() -> void:
 	for i in 30:
 		await get_tree().process_frame
@@ -3348,6 +3372,10 @@ func _screen_test() -> void:
 		return
 	if test_screen == "balltest":
 		await _ball_tests()
+		get_tree().quit()
+		return
+	if test_screen == "musictest":
+		await _music_tests()
 		get_tree().quit()
 		return
 	match test_screen:

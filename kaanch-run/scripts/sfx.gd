@@ -1,26 +1,32 @@
 ## Every sound is made here when the game starts (no sound files): breaking glass, cracks, the throw, jars,
-## the crash, a prism, a blast, and a looping piece of music for each world (made the first time it is needed).
+## the crash, a prism, a blast, and a looping, slow, sad piece of music for each world (made the first time it is needed).
 class_name Sfx
 extends Node
 
 const RATE := 22050
 const MRATE := 16000
 
-# each world's music: tempo, four chords, the colour of the pads, the plucked instrument, drums
+# each world's music is slow and sad: a minor key, the tempo, the tonic (Hz, a low note), which seven notes the key uses,
+# the roots of its four chords (scale degrees, a chord to two bars), and a few soft piano notes:
+# [beat in the 32-beat loop, scale degree (7 is an octave up), beats it is held, loudness]
+const NATURAL := [0, 2, 3, 5, 7, 8, 10]
+const PHRYGIAN := [0, 1, 3, 5, 7, 8, 10]
+const HARMONIC := [0, 2, 3, 5, 7, 8, 11]
 const TRACKS := {
-	"menu": {"bpm": 62.0, "chords": [[220.0, 261.63, 329.63], [174.61, 220.0, 261.63], [196.0, 261.63, 329.63], [196.0, 246.94, 293.66]], "harm": [[1.0, 0.05], [2.0, 0.015]], "pluck": "bell", "arp": [0, 1, 2, 1], "kick": 0.0, "tak": 0.0, "drone": 0.0},
-	"cathedral": {"bpm": 58.0, "chords": [[146.83, 174.61, 220.0], [116.54, 146.83, 174.61], [174.61, 220.0, 261.63], [130.81, 164.81, 196.0]], "harm": [[1.0, 0.05], [2.0, 0.03], [3.0, 0.018]], "pluck": "bell", "arp": [0, 2, 1, 2], "kick": 0.0, "tak": 0.0, "drone": 0.0},
-	"venice": {"bpm": 66.0, "chords": [[261.63, 329.63, 392.0], [220.0, 261.63, 329.63], [174.61, 220.0, 261.63], [196.0, 246.94, 293.66]], "harm": [[1.0, 0.04], [2.0, 0.012]], "pluck": "mandolin", "arp": [0, 1, 2, 1, 2, 1], "kick": 0.0, "tak": 0.0, "drone": 0.0},
-	"lanterns": {"bpm": 60.0, "chords": [[220.0, 261.63, 329.63], [196.0, 246.94, 293.66], [164.81, 196.0, 246.94], [220.0, 293.66, 329.63]], "harm": [[1.0, 0.04], [0.5, 0.03]], "pluck": "koto", "arp": [0, 2, 1, 2, 0, 1], "kick": 0.0, "tak": 0.0, "drone": 0.0},
-	"mosaic": {"bpm": 64.0, "chords": [[164.81, 196.0, 246.94], [174.61, 220.0, 261.63], [196.0, 246.94, 293.66], [174.61, 220.0, 261.63]], "harm": [[1.0, 0.04], [2.0, 0.02]], "pluck": "oud", "arp": [0, 1, 0, 2, 1, 0], "kick": 0.0, "tak": 0.0, "drone": 82.41},
-	"sheesh": {"bpm": 62.0, "chords": [[130.81, 164.81, 196.0], [138.59, 174.61, 207.65], [130.81, 164.81, 196.0], [123.47, 155.56, 196.0]], "harm": [[1.0, 0.035], [2.0, 0.02]], "pluck": "sitar", "arp": [0, 1, 2, 1, 0, 2], "kick": 0.0, "tak": 0.0, "drone": 65.41},
-	"calm": {"bpm": 54.0, "chords": [[220.0, 277.18, 329.63], [185.0, 246.94, 293.66], [196.0, 246.94, 329.63], [174.61, 220.0, 277.18]], "harm": [[1.0, 0.06], [2.0, 0.015]], "pluck": "bell", "arp": [0, 2], "kick": 0.0, "tak": 0.0, "drone": 0.0},
+	"menu": {"bpm": 52.0, "root": 110.0, "scale": NATURAL, "chords": [0, 5, 2, 6], "melody": [[0, 11, 3.5, 0.9], [3.5, 9, 1.5, 0.6], [5, 8, 3, 0.7], [8, 12, 3.5, 0.9], [11.5, 11, 1.5, 0.6], [13, 9, 3, 0.8], [16, 11, 3.5, 0.9], [19.5, 13, 2, 0.7], [21.5, 11, 2.5, 0.7], [24, 10, 3, 0.9], [27, 8, 2, 0.7], [29.5, 9, 2.5, 0.6]]},
+	"cathedral": {"bpm": 48.0, "root": 98.0, "scale": NATURAL, "chords": [0, 6, 5, 4], "melody": [[0, 11, 4, 0.9], [4.5, 9, 2, 0.6], [6.5, 8, 1.5, 0.5], [8, 10, 4, 0.9], [12.5, 8, 3, 0.6], [16, 9, 3.5, 0.9], [20, 7, 1.5, 0.5], [21.5, 11, 2.5, 0.6], [24, 11, 3, 0.9], [27.5, 10, 2, 0.6], [29.5, 8, 2.5, 0.7]]},
+	"venice": {"bpm": 54.0, "root": 82.41, "scale": NATURAL, "chords": [0, 5, 3, 4], "melody": [[0, 11, 3, 0.9], [3, 13, 2, 0.7], [5, 12, 3, 0.7], [8, 14, 3.5, 0.9], [11.5, 11, 1.5, 0.6], [13, 9, 3, 0.8], [16, 12, 3.5, 0.9], [19.5, 10, 2, 0.6], [21.5, 9, 2.5, 0.7], [24, 13, 3, 0.9], [27.5, 11, 2, 0.6], [29.5, 8, 2.5, 0.7]]},
+	"lanterns": {"bpm": 50.0, "root": 123.47, "scale": NATURAL, "chords": [0, 6, 5, 6], "melody": [[0, 11, 4, 0.9], [4.5, 9, 3, 0.7], [8, 13, 3, 0.9], [11.5, 11, 2, 0.6], [13.5, 10, 2.5, 0.7], [16, 9, 4, 0.9], [20.5, 7, 2, 0.6], [22.5, 10, 1.5, 0.5], [24, 13, 3, 0.8], [27.5, 11, 2, 0.6], [29.5, 10, 2.5, 0.8]]},
+	"mosaic": {"bpm": 56.0, "root": 82.41, "scale": PHRYGIAN, "chords": [0, 1, 0, 6], "melody": [[0, 11, 3.5, 0.9], [3.5, 8, 1.5, 0.7], [5, 7, 3, 0.7], [8, 10, 3, 0.9], [11, 12, 2, 0.7], [13, 10, 3, 0.6], [16, 9, 3.5, 0.9], [19.5, 8, 2, 0.7], [21.5, 11, 2.5, 0.8], [24, 10, 3, 0.9], [27, 8, 2, 0.7], [29, 13, 3, 0.7]]},
+	"sheesh": {"bpm": 50.0, "root": 130.81, "scale": HARMONIC, "chords": [0, 3, 4, 0], "melody": [[0, 11, 3, 0.9], [3, 10, 1.5, 0.6], [4.5, 9, 3.5, 0.8], [8, 12, 3.5, 0.9], [11.5, 10, 1.5, 0.6], [13, 7, 3, 0.7], [16, 13, 3, 0.9], [19.5, 11, 2, 0.7], [21.5, 8, 2.5, 0.7], [24, 11, 3, 0.9], [27.5, 9, 2, 0.6], [29.5, 7, 2.5, 0.8]]},
+	"calm": {"bpm": 44.0, "root": 110.0, "scale": NATURAL, "chords": [0, 2, 5, 6], "melody": [[0, 11, 5, 0.8], [5.5, 9, 2.5, 0.6], [8, 13, 4, 0.8], [13, 11, 3, 0.6], [16, 12, 5, 0.8], [21.5, 9, 2.5, 0.6], [24, 10, 4, 0.8], [28.5, 8, 3.5, 0.7]]},
 }
 
 var streams := {}
 var players: Array[AudioStreamPlayer] = []
 var music: AudioStreamPlayer
 var music_old: AudioStreamPlayer
+var pulse: AudioStreamPlayer
 var sound_on := true
 var music_on := true
 var _next := 0
@@ -31,6 +37,9 @@ var _building := {}
 var _mutex := Mutex.new()
 var _bpm := 88.0
 var _tasks: Array[int] = []
+var _tension := 0.0
+var _tension_at := 0
+var _pulse_k := 0.0
 
 
 func _ready() -> void:
@@ -43,6 +52,9 @@ func _ready() -> void:
 	add_child(music)
 	music_old = AudioStreamPlayer.new()
 	add_child(music_old)
+	pulse = AudioStreamPlayer.new()
+	pulse.volume_db = -80.0
+	add_child(pulse)
 	_bus()
 	_tasks.append(WorkerThreadPool.add_task(_build_all))
 
@@ -55,6 +67,17 @@ func _process(dt: float) -> void:
 			music_old.stop()
 	if music.playing and music.volume_db < -9.0:
 		music.volume_db = minf(-9.0, music.volume_db + dt * 25.0)
+	# the heartbeat comes up while the game says the run is going badly, and dies away when it stops saying so
+	var live := Time.get_ticks_msec() - _tension_at < 300 and music_on
+	_pulse_k += ((_tension if live else 0.0) - _pulse_k) * minf(1.0, dt * 3.0)
+	if _pulse_k > 0.02:
+		if not pulse.playing and streams.has("pulse"):
+			pulse.stream = streams["pulse"]
+			pulse.play()
+		pulse.volume_db = -26.0 + 14.0 * _pulse_k
+		pulse.pitch_scale = 1.0 + 0.55 * _pulse_k
+	elif pulse.playing:
+		pulse.stop()
 	if _want != "" and music_on:
 		_mutex.lock()
 		var s = tracks.get(_want)
@@ -97,6 +120,21 @@ func _bus() -> void:
 		AudioServer.add_bus_effect(idx, rv)
 	for p in players:
 		p.bus = "Fx"
+	# the music rings in a big, dark room
+	var mi := AudioServer.get_bus_index("Music")
+	if mi < 0:
+		AudioServer.add_bus()
+		mi = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(mi, "Music")
+		AudioServer.set_bus_send(mi, "Master")
+		var mv := AudioEffectReverb.new()
+		mv.room_size = 0.85
+		mv.damping = 0.6
+		mv.wet = 0.3
+		mv.dry = 1.0
+		AudioServer.add_bus_effect(mi, mv)
+	for p in [music, music_old, pulse]:
+		p.bus = "Music"
 
 
 func _exit_tree() -> void:
@@ -122,12 +160,14 @@ func set_music(on: bool) -> void:
 		music.stream = null
 
 
+## how badly the run is going, 0..1: a slow heartbeat under the music, quicker and louder the worse it gets.
+## The game says it every frame; when it stops saying it (menu, pause, the end) the heartbeat fades away.
+func set_tension(k: float) -> void:
+	_tension = clampf(k, 0.0, 1.0)
+	_tension_at = Time.get_ticks_msec()
+
+
 ## where the beat is now, 0..1
-func set_pitch(p: float) -> void:
-	music.pitch_scale = p
-	music_old.pitch_scale = p
-
-
 func beat_phase(t: float) -> float:
 	var beat := 60.0 / _bpm
 	if music.playing:
@@ -390,64 +430,71 @@ func _build_all() -> void:
 		_ping(nb, 0.0, f, 0.3, 8.0, 0.45)
 		_ping(nb, 0.0, f * 2.01, 0.1, 14.0, 0.3)
 		streams["note%d" % k] = _wav(nb)
+	# a heartbeat: two soft low thumps a second
+	var hb := _buf(1.0)
+	for th in [[0.0, 1.0], [0.3, 0.6]]:
+		var t0 := int(float(th[0]) * RATE)
+		for i in int(0.35 * RATE):
+			var t := float(i) / RATE
+			hb[t0 + i] += sin(TAU * (62.0 - 22.0 * t) * t) * float(th[1]) * exp(-t * 11.0)
+	streams["pulse"] = _wav(hb, RATE, true)
 	_ready_sfx = true
 
 
-## a 4-bar loop: soft chords, a bass note, an instrument plucking up the chord, drums
+## the pitch of a degree of a track's key (0 is the tonic, 7 the octave above it, -1 the note below it)
+func _deg(P: Dictionary, d: int) -> float:
+	var semis: Array = P.scale
+	return float(P.root) * pow(2.0, (float(semis[posmod(d, 7)]) + 12.0 * floorf(d / 7.0)) / 12.0)
+
+
+## an 8-bar loop in a minor key: a slow pad that swells on each chord, a low note under it, a deep drone and a few
+## soft piano notes that ring on. Everything that rings past the end of the loop is wrapped round to its start.
 func _track(P: Dictionary) -> AudioStreamWAV:
-	var bpm: float = P.bpm
-	var beat := 60.0 / bpm
-	var n := int(beat * 16.0 * MRATE)
+	var beat := 60.0 / float(P.bpm)
+	var n := int(beat * 32.0 * MRATE)
 	var b := PackedFloat32Array()
 	b.resize(n)
-	var chords: Array = P.chords
-	var harm: Array = P.harm
-	var arp: Array = P.arp
-	var kick: float = P.kick
-	var tak: float = P.tak
-	var drone: float = P.drone
-	var pl: String = P.pluck
-	var bar := beat * 4.0
-	var step := beat
+	var roots: Array = P.chords
+	var seg := beat * 8.0
+	for c in 4:
+		var r: int = roots[c]
+		var up := 7 if r < 3 else 0
+		var w0 := TAU * _deg(P, r - 7 if r >= 3 else r)
+		var w1 := TAU * _deg(P, r + up)
+		var w2 := TAU * _deg(P, r + up + 2)
+		var w3 := TAU * _deg(P, r + up + 4)
+		var s0 := int(c * seg * MRATE)
+		for i in int(seg * 1.5 * MRATE):
+			var u := float(i) / MRATE
+			var e := 1.0
+			if u < seg * 0.35:
+				e = sin(PI * 0.5 * u / (seg * 0.35))
+				e *= e
+			elif u > seg:
+				e = cos(PI * 0.5 * (u - seg) / (seg * 0.5))
+				e *= e
+			var v := (sin(w1 * 0.998 * u) + sin(w1 * 1.002 * u)) * 0.045 + sin(w2 * u) * 0.05 + sin(w3 * u) * 0.05 + sin(w0 * u) * 0.15
+			b[(s0 + i) % n] += v * e
+	# a drone an octave under the tonic, tuned so that it joins up at the loop's end
+	var wd := TAU * roundf(float(P.root) * 0.5 * n / MRATE) / n
 	for i in n:
-		var t := float(i) / MRATE
-		var ci := int(t / bar) % 4
-		var tb := fmod(t, bar)
-		var ch: Array = chords[ci]
-		var env := pow(sin(PI * tb / bar), 0.6)
-		var v := 0.0
-		for f in ch:
-			for h in harm:
-				v += sin(TAU * f * h[0] * t) * h[1]
-		v *= env
-		var tbeat := fmod(t, beat)
-		# a soft low note under each chord, swelling with it
-		var root: float = ch[0] * 0.5
-		v += sin(TAU * root * t) * 0.07 * env
-		if drone > 0.0:
-			v += (sin(TAU * drone * t) * 0.05 + sin(TAU * drone * 1.5 * t) * 0.025)
-		if kick > 0.0:
-			var kf := 48.0 + 95.0 * exp(-tbeat * 30.0)
-			v += sin(TAU * kf * tbeat) * kick * exp(-tbeat * 10.0)
-		if tak > 0.0:
-			var toff := fmod(t + beat * 0.5, beat)
-			if toff < 0.08:
-				v += sin(TAU * 420.0 * toff) * tak * exp(-toff * 50.0) + (randf() * 2.0 - 1.0) * tak * 0.5 * exp(-toff * 90.0)
-		# the plucked instrument on the eighths
-		var k8 := int(t / step)
-		var t8 := fmod(t, step)
-		var nf: float = ch[int(arp[k8 % arp.size()]) % ch.size()] * 2.0
-		match pl:
-			"bell":
-				v += (sin(TAU * nf * t8) + 0.3 * sin(TAU * nf * 2.76 * t8)) * 0.04 * exp(-t8 * 2.2)
-			"mandolin":
-				v += (sin(TAU * nf * t8) + 0.4 * sin(TAU * nf * 2.0 * t8)) * 0.06 * exp(-t8 * 10.0) * (0.7 + 0.3 * sin(t8 * 140.0))
-			"koto":
-				v += (sin(TAU * nf * t8) + 0.5 * sin(TAU * nf * 3.0 * t8)) * 0.065 * exp(-t8 * 7.0)
-			"oud":
-				v += (sin(TAU * nf * 0.5 * t8) + 0.6 * sin(TAU * nf * t8) + 0.3 * sin(TAU * nf * 1.5 * t8)) * 0.055 * exp(-t8 * 8.0)
-			"sitar":
-				var bz := sin(TAU * nf * t8 + 0.8 * sin(TAU * nf * 2.0 * t8))
-				v += (bz + 0.4 * sin(TAU * nf * 3.01 * t8)) * 0.05 * exp(-t8 * 5.0)
-		b[i] = v
+		b[i] += sin(wd * i) * 0.05
+	for m in P.melody:
+		var f := _deg(P, int(m[1]))
+		var w := TAU * f / MRATE
+		var amp := 0.2 * float(m[3])
+		var dec := 0.9 + f / 880.0
+		var k1 := exp(-dec / MRATE)
+		var k2 := exp(-dec * 1.7 / MRATE)
+		var k3 := exp(-dec * 2.6 / MRATE)
+		var e1 := 1.0
+		var e2 := 1.0
+		var e3 := 1.0
+		var s0 := int(float(m[0]) * beat * MRATE)
+		for i in int(3.4 * MRATE):
+			var v := sin(w * i) * e1 + 0.42 * sin(w * 2.0 * i) * e2 + 0.16 * sin(w * 3.0 * i) * e3
+			b[(s0 + i) % n] += v * amp * minf(1.0, i / (0.004 * MRATE))
+			e1 *= k1
+			e2 *= k2
+			e3 *= k3
 	return _wav(b, MRATE, true)
