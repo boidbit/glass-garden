@@ -69,6 +69,16 @@ def probe_frames(path):
         return 0
 
 
+def probe_size(path):
+    p = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                        "-of", "csv=p=0", path], capture_output=True, text=True)
+    try:
+        w, h = p.stdout.strip().split(",")[:2]
+        return int(w), int(h)
+    except ValueError:
+        return 0, 0
+
+
 def load_audio(path):
     p = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vn", "-ac", "2", "-ar", str(SR), "-f", "f32le", "-"], capture_output=True)
     a = np.frombuffer(p.stdout, dtype=np.float32)
@@ -180,8 +190,10 @@ class Reader:
     def _open(self, i):
         self.close()
         t = max(0.0, (i - 0.5) / FPS)
+        # never stretched: a picture of another shape is scaled to cover the frame and cut from the middle
+        fit = "scale=%d:%d:force_original_aspect_ratio=increase:flags=bicubic,crop=%d:%d" % (W, H, W, H)
         self.proc = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", "%.4f" % t, "-i", self.path, "-an",
-                                      "-vf", "scale=%d:%d:flags=bicubic" % (W, H), "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+                                      "-vf", fit, "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
                                      stdout=subprocess.PIPE, bufsize=W * H * 3 * 2)
         self.pos = i
 
@@ -1196,7 +1208,11 @@ def make(rec, takes_dir, out_dir, name):
     os.makedirs(work, exist_ok=True)
     takes = [Take(i, t, takes_dir) for i, t in enumerate(rec["takes"])]
     for t in takes:
-        print("take %s: %s, %d frames, %d moments" % (t.spec["name"], "ok" if t.ok() else "NOT USABLE", t.nframes, len(t.moments)))
+        size = probe_size(t.avi) if os.path.exists(t.avi) else (0, 0)
+        print("take %s: %s, %dx%d, %d frames, %d moments" % (t.spec["name"], "ok" if t.ok() else "NOT USABLE", size[0], size[1],
+                                                            t.nframes, len(t.moments)))
+        if t.ok() and size != (W, H):
+            print("  not %dx%d: cut to shape from the middle, never stretched" % (W, H))
     ed = Editor(rec, takes, work)
     ed.plan()
     ed.plan_texts()

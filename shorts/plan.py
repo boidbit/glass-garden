@@ -74,7 +74,7 @@ def recipe(seed, style):
         takes.append({
             "name": "t%d" % (len(takes) + 1), "room": room, "world": world_of(room), "bot": bot,
             "seed": r.randrange(1, 10 ** 6), "max_time": round(max_time, 1), "quit_on": quit_on, "quit_after": quit_after,
-            "balls": balls, "pow": pow_rate, "hud": hud, "fail_after": round(fail_after, 1), "fov": round(r.uniform(2.0, 7.0), 1),
+            "balls": balls, "pow": pow_rate, "hud": hud, "fail_after": round(fail_after, 1), "fov": round(r.uniform(14.0, 19.0), 1),
         })
 
     def some_rooms(k, lo=1, hi=60):

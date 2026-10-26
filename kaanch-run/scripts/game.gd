@@ -130,7 +130,7 @@ var bot_balls := -1
 var pow_rate := 0.2
 var run_seed := -1
 var hud_balls := false
-var fov_add := 4.0
+var fov_add := 17.0
 var quit_on := ""
 var quit_after := 3.0
 var max_time := 0.0
@@ -189,9 +189,6 @@ func _ready() -> void:
 	Glass.mats()
 	Worlds.mats()
 	_make_scene()
-	if shorts:
-		# a tall picture: the view keeps its width, so the way is as wide as on a phone held sideways
-		cam.keep_aspect = Camera3D.KEEP_WIDTH
 	sfx = Sfx.new()
 	sfx.shorts = shorts
 	add_child(sfx)
@@ -1645,6 +1642,8 @@ func _place_camera(dt: float) -> void:
 	cam.rotation = Vector3(deg_to_rad(cam_pitch), sin(dist * 0.05) * 0.015, sin(dist * 0.07) * 0.012 + off.x * 0.1 + roll)
 	cam.fov = 62.0 + clampf((speed - 9.0) * 0.8, 0.0, 6.0) + fov_kick
 	if shorts:
+		# a tall picture (the angle is top to bottom): about 80 degrees, so the way is not squeezed at the sides
+		# and nothing near the top or bottom edge is pulled long
 		cam.fov += fov_add
 
 
@@ -3303,7 +3302,10 @@ func _shorts_start() -> void:
 		balls = bot_balls
 	hud.shorts(hud_balls)
 	ev_f0 = Engine.get_frames_drawn()
-	_ev("start", {"mode": mode, "room": _room_of(dist), "world": world, "bot": bot})
+	# the size of the window being recorded: the recorder checks it is the tall one it asked for
+	var win := DisplayServer.window_get_size()
+	print("shorts: window %dx%d" % [win.x, win.y])
+	_ev("start", {"mode": mode, "room": _room_of(dist), "world": world, "bot": bot, "window": [win.x, win.y]})
 
 
 ## how the run is going, a few times a second, and the end of the recording
