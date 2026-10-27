@@ -35,7 +35,7 @@ jobs:
             args: --auto --mode=endless --from=6 --shots=1230,1300,1370,1450 --quit-at=1460
           - name: mosaic
             args: --auto --mode=endless --from=9 --shots=1830,1900,1970,2050 --quit-at=2060
-          - name: sheesh
+          - name: palace
             args: --auto --mode=endless --from=12 --shots=2430,2500,2570,2650 --quit-at=2660
           - name: screens
             args: ''
@@ -64,11 +64,11 @@ jobs:
           sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglx-mesa0 libxcursor1 libxinerama1 libxi6 libxrandr2 libxkbcommon0 libasound2t64 || true
 
       - name: Import the project
-        working-directory: kaanch-run
+        working-directory: glass-run
         run: ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --import 2>&1 | tail -15 || true
 
       - name: Play and capture
-        working-directory: kaanch-run
+        working-directory: glass-run
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
           NAME: ${{ matrix.name }}

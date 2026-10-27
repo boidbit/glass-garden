@@ -13,7 +13,7 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PROJECT = os.path.join(os.path.dirname(HERE), "kaanch-run")
+PROJECT = os.path.join(os.path.dirname(HERE), "glass-run")
 OVERRIDE = os.path.join(PROJECT, "override.cfg")
 MIN_PLAY = 75.0   # seconds of play to cut a 30-50 s short from
 

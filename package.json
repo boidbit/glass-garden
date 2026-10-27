@@ -1,8 +1,8 @@
 {
-  "name": "kaanch-ka-kamra",
+  "name": "smash-room",
   "version": "1.0.0",
   "private": true,
-  "description": "Kaanch Ka Kamra: a calm glass-breaking game (web and Android).",
+  "description": "Smash Room: a calm glass-breaking game (web and Android).",
   "type": "module",
   "scripts": {
     "build:app": "node scripts/build-app.mjs",

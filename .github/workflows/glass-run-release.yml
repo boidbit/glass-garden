@@ -1,8 +1,8 @@
 name: Glass Run Play release
 
-# builds a signed Android App Bundle (.aab) of the Godot game in kaanch-run/ for Google Play.
+# builds a signed Android App Bundle (.aab) of the Godot game in glass-run/ for Google Play.
 # run it by hand: Actions -> Glass Run Play release -> Run workflow, then download the .aab (for Play) and the .apk (to try on a phone).
-# setup and secrets: kaanch-run/RELEASE.md
+# setup and secrets: glass-run/RELEASE.md
 
 on:
   workflow_dispatch:
@@ -20,7 +20,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: kaanch-run-release
+  group: glass-run-release
   cancel-in-progress: false
 
 env:
@@ -44,7 +44,7 @@ jobs:
         run: |
           for v in KEYSTORE_B64 KEY_ALIAS KEY_PASS; do
             if [ -z "${!v}" ]; then
-              echo "::error title=Missing secret::Set ANDROID_KEYSTORE_BASE64, ANDROID_KEY_ALIAS and ANDROID_KEYSTORE_PASSWORD in Settings -> Secrets and variables -> Actions (see kaanch-run/RELEASE.md)"
+              echo "::error title=Missing secret::Set ANDROID_KEYSTORE_BASE64, ANDROID_KEY_ALIAS and ANDROID_KEYSTORE_PASSWORD in Settings -> Secrets and variables -> Actions (see glass-run/RELEASE.md)"
               exit 1
             fi
           done
@@ -101,7 +101,7 @@ jobs:
           EOF
 
       - name: Install the Android build template into the project
-        working-directory: kaanch-run
+        working-directory: glass-run
         run: |
           set -e
           mkdir -p android/build
@@ -121,19 +121,21 @@ jobs:
             exit 1
           fi
           echo "VERSION_NAME=$VN" >> "$GITHUB_ENV"
-          sed -i "s|^version/name=.*|version/name=\"$VN\"|" kaanch-run/export_presets.cfg
-          # Play needs a versionCode that goes up with every upload: the run number unless you gave one
-          VC="${INPUT_VERSION_CODE:-${GITHUB_RUN_NUMBER}}"
+          sed -i "s|^version/name=.*|version/name=\"$VN\"|" glass-run/export_presets.cfg
+          # Play needs a versionCode that goes up with every upload: the run number unless you gave one.
+          # This workflow ran 3 times under its old file name, and a renamed workflow counts its runs from 1 again:
+          # 10 is added, so an automatic code always comes out above every code uploaded before the rename.
+          VC="${INPUT_VERSION_CODE:-$((GITHUB_RUN_NUMBER + 10))}"
           if ! [[ "$VC" =~ ^[0-9]+$ ]] || [ "$VC" -lt 1 ] || [ "$VC" -gt 2100000000 ]; then
             echo "::error title=Bad version code::the version code must be a whole number from 1 to 2100000000 (put 1.01 in Version name instead), got: $VC"
             exit 1
           fi
           echo "VERSION_CODE=$VC" >> "$GITHUB_ENV"
-          sed -i "s|^version/code=.*|version/code=$VC|" kaanch-run/export_presets.cfg
-          grep -E "^version/" kaanch-run/export_presets.cfg
+          sed -i "s|^version/code=.*|version/code=$VC|" glass-run/export_presets.cfg
+          grep -E "^version/" glass-run/export_presets.cfg
 
       - name: Build and sign the bundle and the APK
-        working-directory: kaanch-run
+        working-directory: glass-run
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -162,13 +164,13 @@ jobs:
 
       - name: Check both are signed with the upload key
         run: |
-          jarsigner -verify -certs kaanch-run/build/GlassRun.aab | tee verify.log | tail -5
+          jarsigner -verify -certs glass-run/build/GlassRun.aab | tee verify.log | tail -5
           grep -q "jar verified" verify.log
           if grep -qi "CN=Android Debug" verify.log; then
             echo "::error title=Debug-signed bundle::the bundle is signed with a debug key, Play will refuse it"
             exit 1
           fi
-          "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --print-certs kaanch-run/build/GlassRun.apk | tee apk-verify.log
+          "${ANDROID_SDK}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --print-certs glass-run/build/GlassRun.apk | tee apk-verify.log
           if grep -qi "CN=Android Debug" apk-verify.log; then
             echo "::error title=Debug-signed APK::the APK is signed with a debug key"
             exit 1
@@ -177,8 +179,8 @@ jobs:
       - name: Name the files
         run: |
           mkdir -p dist
-          cp kaanch-run/build/GlassRun.aab "dist/GlassRun-${VERSION_NAME}-code${VERSION_CODE}.aab"
-          cp kaanch-run/build/GlassRun.apk "dist/GlassRun-${VERSION_NAME}-code${VERSION_CODE}.apk"
+          cp glass-run/build/GlassRun.aab "dist/GlassRun-${VERSION_NAME}-code${VERSION_CODE}.aab"
+          cp glass-run/build/GlassRun.apk "dist/GlassRun-${VERSION_NAME}-code${VERSION_CODE}.apk"
 
       - uses: actions/upload-artifact@v5
         with:

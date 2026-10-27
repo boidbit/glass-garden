@@ -536,7 +536,7 @@ const BOSS := {
 	"venice": [[3, 2], [3, 2, 3, 2], "mid"],
 	"lanterns": [[1, 0], [0, 1, 1, 0], "mid"],
 	"mosaic": [[3, 2], [3, 2, 1, 3], "thick"],
-	"sheesh": [[1, 4], [1, 1, 4, 1], "mirror"],
+	"palace": [[1, 4], [1, 1, 4, 1], "mirror"],
 }
 
 

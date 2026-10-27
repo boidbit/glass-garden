@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - 'kaanch-run/**'
-      - '.github/workflows/kaanch-run.yml'
+      - 'glass-run/**'
+      - '.github/workflows/glass-run.yml'
   workflow_dispatch:
 
 permissions:
@@ -54,18 +54,20 @@ jobs:
       - name: Name the APK
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/KaanchKaKamra-${GITHUB_RUN_NUMBER}.apk"
-          cp android/app/build/outputs/apk/debug/app-debug.apk dist/KaanchKaKamra.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/SmashRoom-${GITHUB_RUN_NUMBER}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/SmashRoom.apk
 
       - uses: actions/upload-artifact@v5
         with:
-          name: KaanchKaKamra-apk
-          path: dist/KaanchKaKamra-${{ github.run_number }}.apk
+          name: SmashRoom-apk
+          path: dist/SmashRoom-${{ github.run_number }}.apk
 
       - name: Publish to the "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Kaanch Ka Kamra (latest build)" --notes "The newest Android build, made automatically from the main branch. Download KaanchKaKamra.apk and open it on your phone to install." --latest
-          gh release upload latest dist/KaanchKaKamra.apk --clobber
-          gh release edit latest --notes "The newest Android build (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}), made automatically from the main branch. Download KaanchKaKamra.apk and open it on your phone to install."
+          gh release view latest >/dev/null 2>&1 || gh release create latest --title "Smash Room (latest build)" --notes "The newest Android build, made automatically from the main branch. Download SmashRoom.apk and open it on your phone to install." --latest
+          gh release upload latest dist/SmashRoom.apk --clobber
+          # only the APK under its present name (the file under the game's old name goes)
+          gh release view latest --json assets -q '.assets[].name' | grep -vx 'SmashRoom.apk' | xargs -r -n1 gh release delete-asset latest -y
+          gh release edit latest --title "Smash Room (latest build)" --notes "The newest Android build (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}), made automatically from the main branch. Download SmashRoom.apk and open it on your phone to install. It is a new app: if the game is on your phone under its old name, uninstall that one."

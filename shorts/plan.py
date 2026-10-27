@@ -15,9 +15,8 @@ import time
 STYLES = ["perfect", "clutch", "power", "tour", "wheel", "fail", "sniper", "chaos"]
 
 # the endless run: a new world every three rooms (a checkpoint door at the end of the third),
-# a great glass wheel at the end of every tenth room
-WORLDS = ["cathedral", "venice", "lanterns", "mosaic", "sheesh"]
-WORLD_NAMES = {"cathedral": "CATHEDRAL", "venice": "VENICE", "lanterns": "LANTERN NIGHT", "mosaic": "MOSAIC COURT", "sheesh": "SHEESH MAHAL"}
+# a great glass wheel at the end of every tenth room. Worlds and rooms are never named on screen.
+WORLDS = ["cathedral", "venice", "lanterns", "mosaic", "palace"]
 
 
 def world_of(room):
@@ -49,7 +48,7 @@ HOOKS = {
                "HOW IS THIS *STILL ALIVE?*", "DON'T. MISS. *NOW.*"],
     "power": ["HOT IRON BREAKS *EVERYTHING*", "THIS POWER-UP IS *BROKEN*", "*TRIPLE BALL* MODE", "POWER-UPS MAKE THIS *INSANE*"],
     "tour": ["*{worlds}* WORLDS OF GLASS IN *{sec}* SECONDS", "WHICH WORLD IS *YOUR* FAVORITE?", "GLASS AROUND *THE WORLD*",
-             "FROM CATHEDRAL TO *SHEESH MAHAL*"],
+             "EVERY DOOR, *A NEW WORLD*"],
     "wheel": ["THE *GIANT* GLASS WHEEL", "ONLY *1%* REACH THIS WHEEL", "WAIT FOR *THE WHEEL...*", "THE BIGGEST GLASS *IN THE GAME*"],
     "fail": ["THIS RUN WAS PERFECT... *UNTIL*", "WAIT FOR *THE ENDING*", "SO CLOSE. *SO CLOSE.*", "I SHOULDN'T HAVE *MISSED THAT*"],
     "sniper": ["LONG RANGE *GLASS SNIPER*", "BREAKING GLASS FROM *40M* AWAY", "NEVER LET IT *GET CLOSE*", "*PERFECT* AIM ONLY"],

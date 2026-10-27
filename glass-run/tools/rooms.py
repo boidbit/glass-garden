@@ -1,6 +1,6 @@
 # The 50 rooms of the endless run, written by hand; this checks them and writes scripts/rooms.gd
 import sys
-WORLDS=["cathedral","venice","lanterns","mosaic","sheesh"]
+WORLDS=["cathedral","venice","lanterns","mosaic","palace"]
 SKY_OK=set("giant slide_block fall_blocks scissors saw_disc diag_blade blade_line chessboard tile_rain rot_grid hole_glass tube twotone domino blocks pane split grid layers stack color_row tempered frosted slide rise hinge weak laminated shy spinner rotor prism mirror orbit blast snake shield halves flyin charge shutters drop".split())
 EXT={"layers":6.4,"frosted":1.6,"snake":10.4,"prism":19,"collapse":4.4,"boss":1,"fall_blocks":10,"blade_line":9,"door_line":12,"tube":9,"diag_blade":2.5}
 SKY_NO={"pendulum_blade","sensor_door","closing_doors","door_line","shutter_door","button_door","popout","pendulum","revolving","grille","collapse","doors"}
@@ -57,7 +57,7 @@ R=[
 ("c48 s104 c48","24 hinge/5, 64 drop/5, 84 blast/5, 104 J, 112 prism/5, 168 flyin/5"),
 ("c32 h96 c72","48 spinner/5, 72 halves/5, 96 J, 104 blocks/5, 144 shield/5, 168 revolving/5"),
 ("c40 h96 c64","22 color_row/5, 56 prism/5, 88 J, 96 blocks/5, 140 J, 160 boss/5"),
-# ---- Sheesh Mahal: halls of mirrors, revolving doors, shields; the hardest
+# ---- The palace of mirrors: halls of mirrors, revolving doors, shields; the hardest
 ("c32 t112 c56","48 mirror/5, 72 revolving/5, 96 J, 104 shield/5, 128 charge/5, 164 halves/5"),
 ("c40 h96 c64","22 weak/5, 56 mirror/5, 80 blast/5, 104 J, 112 spinner/5, 152 pendulum/5, 174 J"),
 ("c32 s120 c48","48 drop/5, 68 mirror/5, 90 J, 98 shield/5, 122 drop/5, 166 flyin/5"),

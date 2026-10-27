@@ -220,18 +220,33 @@ func _ready() -> void:
 
 
 # ---------- saving and settings ----------
+const SAVE_FILE := "user://glass_run.cfg"
+# where the save file was kept under the game's old name: read once and moved, so no player loses their progress
+# (this line can go once every tester has opened a build with it)
+const OLD_SAVE_FILE := "user://kaanch_run.cfg"
+
+
 func _load() -> void:
 	var c := ConfigFile.new()
-	if c.load("user://kaanch_run.cfg") == OK:
+	var ok := c.load(SAVE_FILE) == OK
+	var moved := false
+	if not ok and c.load(OLD_SAVE_FILE) == OK:
+		ok = true
+		moved = true
+	if ok:
 		for k in save.keys():
 			save[k] = c.get_value("save", k, save[k])
+	if moved:
+		_save()
+		if FileAccess.file_exists(SAVE_FILE):
+			DirAccess.remove_absolute(OLD_SAVE_FILE)
 
 
 func _save() -> void:
 	var c := ConfigFile.new()
 	for k in save.keys():
 		c.set_value("save", k, save[k])
-	c.save("user://kaanch_run.cfg")
+	c.save(SAVE_FILE)
 
 
 func _on_setting(key: String, value) -> void:
@@ -464,7 +479,7 @@ func _warm_up() -> void:
 	var sq := Glass.rect(-0.5, 0.5, -0.5, 0.5)
 	var meshes := [Glass.slab_mesh(sq, "thin"), Glass.slab_mesh(sq, "mirror"), Glass.slab_mesh(sq, "thin", 1.0, 0),
 		crystal_mesh, prism_mesh, column_mesh, jar_mesh, marble_mesh]
-	var mats := [Worlds.lit_mat, Worlds.glow_mat, Worlds.shaft_mat, Worlds.tex_like("cathedral"), Worlds.tex_like("sheesh"),
+	var mats := [Worlds.lit_mat, Worlds.glow_mat, Worlds.shaft_mat, Worlds.tex_like("cathedral"), Worlds.tex_like("palace"),
 		Worlds.tex_like("shoji"), shadow_mat, berg_mat, chand_mat, jar_mat, hub_mat, steel_mat, crack_mat, mark_mat, frame_mat,
 		fx.line_node.material_override]
 	mats.append_array(marble_mats)
@@ -645,8 +660,6 @@ func _start(m: String, from_room := 0) -> void:
 	speed = 0.0
 	hud.show_play(mode)
 	_hud_all()
-	var title: String = "Level 1 · First Light" if mode == "level1" else ("Calm" if mode == "calm" else Worlds.def(world).name)
-	hud.show_toast(title, Hud.ACCENT, 0.8)
 	sfx.play("tick")
 
 
@@ -816,7 +829,7 @@ func _set_world(w: String, now := false) -> void:
 	if mode != "menu":
 		if new_world:
 			sfx.play_music("calm" if mode == "calm" else w)
-			_ev("world", {"world": w, "name": Worlds.def(w).name})
+			_ev("world", {"world": w})
 
 
 func _apply_look(backdrop := true) -> void:
@@ -1075,7 +1088,7 @@ func _island(d: float) -> void:
 					Worlds.box(st, Vector3(q.x, 0.25 + k * 0.5, q.y), Vector3(0.16, 0.5, 0.16), Color("c8302c") if k % 2 == 0 else Color("f4f0e8"))
 		"lanterns", "cathedral", "mosaic":
 			Worlds.box(st, Vector3(-2.0, 0.9, 1.7), Vector3(0.1, 1.8, 0.1), Color("2b3138"))
-		"sheesh":
+		"palace":
 			for q in [Vector2(-1.9, 1.6), Vector2(1.9, 1.6)]:
 				Worlds.box(st, Vector3(q.x, 0.7, q.y), Vector3(0.14, 1.4, 0.14), Color("e8b64a"))
 	st.set_material(Worlds.lit_mat)
@@ -1090,7 +1103,7 @@ func _island(d: float) -> void:
 	Worlds.box(gs, Vector3(-2.34, -0.28, 0), Vector3(0.04, 0.05, 3.8), acc * 0.8)
 	if w in ["lanterns", "cathedral", "mosaic"]:
 		Worlds.box(gs, Vector3(-2.0, 1.95, 1.7), Vector3(0.3, 0.4, 0.3), T.lights[0])
-	elif w == "sheesh":
+	elif w == "palace":
 		for q in [Vector2(-1.9, 1.6), Vector2(1.9, 1.6)]:
 			Worlds.box(gs, Vector3(q.x, 1.5, q.y), Vector3(0.22, 0.22, 0.22), Color("ffd896"))
 	gs.set_material(Worlds.glow_mat)
@@ -1550,20 +1563,10 @@ func _process(delta: float) -> void:
 	var w := _world_at(dist)
 	if w != world or _mood_at(dist) != mood:
 		_set_world(w)
+	# rooms have no names on the screen: nothing is written there while you play but the ball count
 	if mode == "endless" and _room_of(dist) != room:
 		room = _room_of(dist)
-		var k := room % Rooms.COUNT
-		var wn: String = Worlds.def(Rooms.world_of(room)).name
-		var small := "%s · ROOM %d OF 10" % [wn.to_upper(), k % Rooms.PER_WORLD + 1]
-		if k % Rooms.PER_WORLD == Rooms.PER_WORLD - 1:
-			small = "%s · FINAL ROOM" % wn.to_upper()
-		if room >= Rooms.COUNT:
-			small += "  ·  REMIX %d" % (room / Rooms.COUNT)
-		if Rooms.spins(room):
-			small += "  ·  THE ROOM TURNS"
 		_ev("room", {"room": room, "spins": Rooms.spins(room)})
-		var L: Dictionary = Worlds.look(Rooms.world_of(room), k % Rooms.PER_WORLD)
-		hud.show_title(L.name, small, (L.sun as Color).lerp(Color.WHITE, 0.3))
 	var sn := section_at(dist + 2.0)
 	if sn != sec_now:
 		sec_now = sn
@@ -1762,7 +1765,7 @@ func _checkpoint(g: GGate) -> void:
 		cp_room = r
 		save.cp = r
 		_save()
-	# in the endless run the next room's name says it (see _process)
+	# in the endless run the door bursting says it (see _door_burst)
 	if mode != "endless":
 		hud.show_toast("CHECKPOINT", Hud.ACCENT, 0.8)
 		hud.flash_screen(Color.WHITE, 0.35, 0.6)

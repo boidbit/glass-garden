@@ -1,20 +1,20 @@
 name: Glass Run APK
 
-# the Godot game in kaanch-run/: built into an APK on every change, published to the "run-latest" release
+# the Godot game in glass-run/: built into an APK on every change, published to the "run-latest" release
 
 on:
   push:
     branches: [main]
     paths:
-      - 'kaanch-run/**'
-      - '.github/workflows/kaanch-run.yml'
+      - 'glass-run/**'
+      - '.github/workflows/glass-run.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: kaanch-run-apk
+  group: glass-run-apk
   cancel-in-progress: true
 
 jobs:
@@ -65,17 +65,19 @@ jobs:
           EOF
           cat ~/.config/godot/editor_settings-4.3.tres
 
+      # this workflow ran 27 times under its old file name, and a renamed workflow counts from 1 again:
+      # 30 is added, so each APK still installs over the last one (Android will not go down a version)
       - name: Version from the run number
-        run: sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/" kaanch-run/export_presets.cfg
+        run: sed -i "s/^version\/code=.*/version\/code=$((GITHUB_RUN_NUMBER + 30))/" glass-run/export_presets.cfg
 
       - name: Build the APK
-        working-directory: kaanch-run
+        working-directory: glass-run
         run: |
           G=~/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
           $G --headless --import 2>&1 | tail -20 || true
-          $G --headless --export-debug "Android" build/KaanchRun.apk 2>&1 | tee export.log
-          if [ ! -f build/KaanchRun.apk ]; then
+          $G --headless --export-debug "Android" build/GlassRun.apk 2>&1 | tee export.log
+          if [ ! -f build/GlassRun.apk ]; then
             # show the reason on the run's summary page
             msg=$(grep -iE "error|warn|fail" export.log | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
             echo "::error title=Godot export failed::${msg}"
@@ -85,13 +87,15 @@ jobs:
 
       - uses: actions/upload-artifact@v5
         with:
-          name: KaanchRun-apk
-          path: kaanch-run/build/KaanchRun.apk
+          name: GlassRun-apk
+          path: glass-run/build/GlassRun.apk
 
       - name: Publish to the "run-latest" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view run-latest >/dev/null 2>&1 || gh release create run-latest --title "Glass Run (latest build)" --notes "The newest build of Glass Run, the Godot glass run." --latest=false
-          gh release upload run-latest kaanch-run/build/KaanchRun.apk --clobber
-          gh release edit run-latest --notes "The newest build of Glass Run (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}). Download KaanchRun.apk and open it on your phone to install. It installs next to Kaanch Ka Kamra, it does not replace it."
+          gh release upload run-latest glass-run/build/GlassRun.apk --clobber
+          # only the APK under its present name (the file under the game's old name goes)
+          gh release view run-latest --json assets -q '.assets[].name' | grep -vx 'GlassRun.apk' | xargs -r -n1 gh release delete-asset run-latest -y
+          gh release edit run-latest --notes "The newest build of Glass Run (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}). Download GlassRun.apk and open it on your phone to install. It installs next to Smash Room, it does not replace it."

@@ -1,15 +1,22 @@
-# Kaanch Ka Kamra — Glass Garden
+# Glass Garden
+
+Two games, each its own app:
+
+- **Smash Room** (this page): rooms full of glass to break, in the browser and on Android. APK: `SmashRoom.apk`.
+- **Glass Run** ([glass-run/](glass-run/README.md)): the Godot game, a run through worlds of glass. APK: `GlassRun.apk`. YouTube Shorts of it: [shorts/](shorts/README.md).
+
+# Smash Room
 
 A calm, stress-relief glass-breaking game, made with three.js (r170) and cannon-es. It runs in the browser and as an Android app.
 
 - **Free play:** four cosy rooms full of glass to break with a slingshot, ball, hammer or an earthquake. Rewind puts every piece back.
-- **Glass Run:** an endless path through a garden, a jungle, the mountains and along a river. Each zone has its own glass, and a glass pavilion comes down in slow motion before every checkpoint.
+- **Garden Run:** an endless path through a garden, a jungle, the mountains and along a river. Each zone has its own glass, and a glass pavilion comes down in slow motion before every checkpoint.
 - **The sky:** after each pavilion the path lifts off into the clouds. Up there the glass moves: a spinning glass fan, glass scissors, a swinging lens, a glass serpent, a storm cloud charging a pane, flocks of glass birds, rings to fly through, and walls of thin and thick glass (thick takes two or three hits). Each sky ends with a great turning glass wheel, then a dive back down into the next zone.
 
 ## Android app
 
 Every push to `main` builds an APK on GitHub (see **Actions → Android APK**).
-The newest one is always on the [latest release](../../releases/tag/latest): download `KaanchKaKamra.apk` on your phone and open it to install (allow installing from your browser when Android asks).
+The newest one is always on the [latest release](../../releases/tag/latest): download `SmashRoom.apk` on your phone and open it to install (allow installing from your browser when Android asks). It is a new app since the game was renamed: if the game is on your phone under its old name, uninstall that one.
 
 The app has the game and its libraries inside, so it works offline.
 

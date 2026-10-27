@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.boidbit.kaanchkakamra"
+    namespace "com.boidbit.smashroom"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.boidbit.kaanchkakamra"
+        applicationId "com.boidbit.smashroom"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // each build on GitHub gets a higher number, so a new APK installs over the old one

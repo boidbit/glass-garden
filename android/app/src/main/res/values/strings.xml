@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Kaanch Ka Kamra</string>
-    <string name="title_activity_main">Kaanch Ka Kamra</string>
-    <string name="package_name">com.boidbit.kaanchkakamra</string>
-    <string name="custom_url_scheme">com.boidbit.kaanchkakamra</string>
+    <string name="app_name">Smash Room</string>
+    <string name="title_activity_main">Smash Room</string>
+    <string name="package_name">com.boidbit.smashroom</string>
+    <string name="custom_url_scheme">com.boidbit.smashroom</string>
 </resources>

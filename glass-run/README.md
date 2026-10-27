@@ -7,7 +7,7 @@ You fly forward through halls of glass. Tap to throw heavy iron balls and break 
 ## Modes
 
 - **Level 1 · First Light** — a 90-second run through a stained-glass cathedral: the crypt tunnel, the great hall, out through the roof into the sky, and back in for a rose-window finale. Finishing it gives up to three stars (for accuracy and no crashes) and unlocks Endless.
-- **Endless** — 50 rooms made by hand, 200 m each; a checkpoint door comes every three rooms (600 m, a minute or more), and through each door is a new world: Cathedral, Venice (Murano), Lanterns, Mosaic and Sheesh Mahal, each with its own music. Breaking the door is a moment of its own: time slows, the light flares, you are pushed through, and you get five balls. Every tenth room ends with a great wheel of glass. No room comes twice in a run; after all 50 (10 km) they come again as a remix, faster and the other way round. The rooms are written in `tools/rooms.py`, which checks them and writes `scripts/rooms.gd`.
+- **Endless** — 50 rooms made by hand, 200 m each; a checkpoint door comes every three rooms (600 m, a minute or more), and through each door is a new world: a cathedral, Venice (Murano), lanterns at night, a mosaic court and a palace of mirrors, each with its own music. Breaking the door is a moment of its own: time slows, the light flares, you are pushed through, and you get five balls. Every tenth room ends with a great wheel of glass. No room comes twice in a run; after all 50 (10 km) they come again as a remix, faster and the other way round. The rooms are written in `tools/rooms.py`, which checks them and writes `scripts/rooms.gd`.
 - **Calm** — slower, with no penalties and unlimited marbles.
 
 ## The way
@@ -39,9 +39,9 @@ Now and then a crystal of power stands in place of a crystal of balls: gold slow
 
 ## Build
 
-Every push that changes this folder builds an APK on GitHub (**Actions → Glass Run APK**) and puts it on the [run-latest release](../../../releases/tag/run-latest) as `KaanchRun.apk`. It installs next to Kaanch Ka Kamra.
+Every push that changes this folder builds an APK on GitHub (**Actions → Glass Run APK**) and puts it on the [run-latest release](../../../releases/tag/run-latest) as `GlassRun.apk`. It installs next to Smash Room.
 
-Run it on a computer: open this folder in Godot 4.3, or `godot --path kaanch-run`.
+Run it on a computer: open this folder in Godot 4.3, or `godot --path glass-run`.
 
 ## Shorts
 

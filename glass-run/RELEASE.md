@@ -1,11 +1,11 @@
 # Releasing Glass Run on Google Play
 
-The workflow **Glass Run Play release** (`.github/workflows/kaanch-run-release.yml`) builds a signed Android App Bundle (`.aab`), the only format Play takes for new apps (it won't take an APK). It uses Godot 4.7.2 so the bundle targets API 36, which Play requires for new apps and updates since 31 August 2026. The everyday APK workflow (**Glass Run APK**) is unchanged and still uses Godot 4.3.
+The workflow **Glass Run Play release** (`.github/workflows/glass-run-release.yml`) builds a signed Android App Bundle (`.aab`), the only format Play takes for new apps (it won't take an APK). It uses Godot 4.7.2 so the bundle targets API 36, which Play requires for new apps and updates since 31 August 2026. The everyday APK workflow (**Glass Run APK**) is unchanged and still uses Godot 4.3.
 
 ## Releasing
 
 1. GitHub → **Actions** → **Glass Run Play release** → **Run workflow**.
-2. *Version name* is what players see (e.g. `1.01`, `1.02`). *Version code* is a separate whole number that Play uses to order uploads; it cannot be 1.01. Leave it empty and it is the run number, which goes up every run, or type a whole number higher than your last Play upload (Play refuses one it has seen before).
+2. *Version name* is what players see (e.g. `1.01`, `1.02`). *Version code* is a separate whole number that Play uses to order uploads; it cannot be 1.01. Leave it empty and it is the run number plus 10, which goes up every run (the 10 carries on the count from before the workflow file was renamed, which started its run numbers again from 1), or type a whole number higher than your last Play upload (Play refuses one it has seen before).
 3. When it is green, open the run and download **GlassRun-release** from *Artifacts*. The zip has two files, both signed with your upload key:
    - `GlassRun-<name>-code<code>.aab` — upload this in Play Console → your app → **Release** → Internal testing → **Create new release**.
    - `GlassRun-<name>-code<code>.apk` — install this on a phone to try the game first. It cannot update an install that came from Play (Play re-signs with its own key).

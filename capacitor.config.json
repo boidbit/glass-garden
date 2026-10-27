@@ -1,6 +1,6 @@
 {
-  "appId": "com.boidbit.kaanchkakamra",
-  "appName": "Kaanch Ka Kamra",
+  "appId": "com.boidbit.smashroom",
+  "appName": "Smash Room",
   "webDir": "www",
   "android": {
     "backgroundColor": "#0b141c"

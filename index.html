@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Kaanch Ka Kamra</title>
+<title>Smash Room</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
@@ -281,7 +281,7 @@
     .logo { font-size: 1.8rem; }
   }
 
-  /* ---- Glass Run ---- */
+  /* ---- Garden Run ---- */
   .modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .modes button { display: grid; gap: 2px; justify-items: start; text-align: left; white-space: normal; padding: 11px 13px; border-radius: 16px; background: var(--chip); border-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; min-width: 0; }
   .modes button b { font-family: var(--font-display); font-size: 1.02rem; font-weight: 800; }
@@ -460,7 +460,7 @@
 <div id="stage" role="img" aria-label="A 3D room full of glass that you stand inside. Break things with a slingshot, a ball or a hammer, then rewind time to put everything back."></div>
 
 <div class="topbar">
-  <div class="caption card" id="title"><h1>Kaanch Ka Kamra</h1></div>
+  <div class="caption card" id="title"><h1>Smash Room</h1></div>
   <div class="btnrow">
     <button id="jodo" type="button" disabled aria-label="Rewind and put the broken glass back together">↺ Rewind</button>
     <button id="pauseBtn" type="button" aria-label="Pause and settings"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="3.6" height="12" rx="1.2"/><rect x="9.4" y="2" width="3.6" height="12" rx="1.2"/></svg></button>
@@ -513,7 +513,7 @@
         <path d="M14 16 L24 13" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
       </svg>
       <div class="brandtext">
-        <h1 class="logo" id="startTitle">Kaanch Ka Kamra</h1>
+        <h1 class="logo" id="startTitle">Smash Room</h1>
         <p class="tagline">Break glass. Breathe out. Put it all back.</p>
       </div>
     </header>
@@ -527,7 +527,7 @@
         </button>
         <button type="button" data-mode="run" aria-pressed="false">
           <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M18 42 22 8M30 42 26 8"/><path d="M20 30h8M21 20h6M22 12h4"/><path d="M10 42h28"/></svg>
-          <span><b>Glass Run</b><small>Endless garden, jungle, mountains and river. <em id="bestRun"></em></small></span>
+          <span><b>Garden Run</b><small>Endless garden, jungle, mountains and river. <em id="bestRun"></em></small></span>
           <i class="go" aria-hidden="true">›</i>
         </button>
       </div>
@@ -571,7 +571,7 @@
     <button id="resumeBtn" class="primary bigbtn" type="button">Resume</button>
     <div class="rows">
       <div class="row" id="rowRoom"><span>Room</span><div class="seg" id="roomSeg"><button type="button" data-room="living">Living</button><button type="button" data-room="kitchen">Kitchen</button><button type="button" data-room="glass">Glass House</button><button type="button" data-room="garage">Garage</button></div></div>
-      <div class="row" id="rowRun"><span>Glass Run</span><div class="seg"><button type="button" id="runRestart">Restart</button><button type="button" id="runQuit">Free play</button></div></div>
+      <div class="row" id="rowRun"><span>Garden Run</span><div class="seg"><button type="button" id="runRestart">Restart</button><button type="button" id="runQuit">Free play</button></div></div>
       <div class="row"><span>Time of day</span><div class="seg" id="todSeg" role="group" aria-label="Time of day"><button type="button" data-tod="0">Day</button><button type="button" data-tod="1">Evening</button><button type="button" data-tod="2">Night</button><button type="button" data-tod="auto">Cycle</button></div></div>
       <div class="row"><span>Rain</span><button id="rainBtn" class="switch" type="button" aria-pressed="false">Off</button></div>
       <div class="row" id="rowBreathe"><span>Breathe mode</span><button id="saansBtn" class="switch" type="button" aria-pressed="false">Off</button></div>
@@ -610,7 +610,7 @@
   </div>
 </div>
 
-<!-- Glass Run result -->
+<!-- Garden Run result -->
 <div id="runCard" class="overlay menu" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="runTitle">
     <h2 id="runTitle">Level clear!</h2>
@@ -675,7 +675,7 @@
     <ol class="how">
       <li><b>Aim and shoot.</b> Tap the glass to fire the slingshot. Hold to keep firing. Drag to look around.</li>
       <li><b>Free play.</b> Walk with the stick (or WASD), switch to the ball, the hammer or an earthquake on the right. Nothing is lost: <b>Rewind</b> puts every piece back.</li>
-      <li><b>Glass Run.</b> The path moves on its own. Break the glass in your way before you reach it, hit the glowing gems for pebbles, and keep a streak going for double and triple shots.</li>
+      <li><b>Garden Run.</b> The path moves on its own. Break the glass in your way before you reach it, hit the glowing gems for pebbles, and keep a streak going for double and triple shots.</li>
       <li><b>The sky.</b> After each pavilion you fly up into the clouds. Up there the glass moves: shoot the glowing hub of a spinning fan, break the scissors before they shut, the serpent's head, the pane a storm cloud is charging. Thick green glass takes two or three hits. Fly through the rings for pebbles and speed.</li>
       <li><b>Checkpoints.</b> Bring down the glass pavilion before each checkpoint for a slow-motion finish and ten pebbles. If you run out, carry on from your last checkpoint.</li>
       <li><b>Breathe mode.</b> Turn it on in the pause menu. Hold your finger down and breathe in as the ring grows, then let go to breathe out and break the glass.</li>
@@ -9434,7 +9434,7 @@
       g.font = `bold 40px ${FONT}`;
       g.textBaseline = 'middle';
       g.textAlign = 'center';
-      g.fillText('KAANCH 01', w / 2 + 14, h / 2 + 2);
+      g.fillText('SMASH 01', w / 2 + 14, h / 2 + 2);
     };
     M.plate = new THREE.MeshStandardMaterial({ map: gTex(256, 60, plate), roughness: 0.4 });
     // car glass: windscreen (laminated), side windows (tempered), dark rear glass
@@ -11018,7 +11018,7 @@
   })();
 
   // =====================================================================
-  // Glass Run: an endless garden path. It is built a piece at a time just ahead of you and taken away
+  // Garden Run: an endless garden path. It is built a piece at a time just ahead of you and taken away
   // behind you, so it never ends. New kinds of glass come in as you go further, with a checkpoint now and then.
   // =====================================================================
   const RUN = { X: 0.45, z0: 56, ammo: 20, eye: 1.55, L: 24 };
@@ -11964,7 +11964,7 @@
   }
 
   // =====================================================================
-  // Glass Run zones: the path goes through a garden, then a jungle, then the mountains, and round again.
+  // Garden Run zones: the path goes through a garden, then a jungle, then the mountains, and round again.
   // A tunnel at each checkpoint leads from one zone to the next. Plants are made of many leaf pictures
   // ("cards") rather than solid blobs, so they look soft and real, and they sway a little in the wind.
   // =====================================================================
@@ -18634,7 +18634,7 @@
   runPrevRoom = currentRoom;
   Object.assign(view, ROOM_VIEW[currentRoom]);
   paintRooms();
-  // Free play or Glass Run, picked on the start card
+  // Free play or Garden Run, picked on the start card
   function paintModes() {
     const rn = currentRoom === 'run';
     document.querySelectorAll('#modePick [data-mode]').forEach((b) => {
@@ -18757,7 +18757,7 @@
     ['pgHome', 'pgPlay'].forEach((p) => { $(p).hidden = p !== id; });
     if (id === 'pgPlay') {
       const rn = currentRoom === 'run';
-      $('pgPlayTitle').textContent = rn ? 'Glass Run' : 'Free play';
+      $('pgPlayTitle').textContent = rn ? 'Garden Run' : 'Free play';
       $('moodAsk').hidden = rn;
       $('moodBefore').hidden = rn;
       const b = $('startBtn');

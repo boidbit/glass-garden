@@ -740,32 +740,23 @@ class Editor:
 
         if self.cl_t is not None:
             t = self.cl_t
-            if self.cl.mom.kind == "door" and self.cl.mom.ev.get("to"):
+            if self.cl.mom.kind == "door":
                 if free(t + 0.15, t + 1.5):
-                    texts.append(Txt(t + 0.15, t + 1.5, P.WORLD_NAMES.get(self.cl.mom.ev["to"], ""), 88, 0.36, "slam"))
+                    texts.append(Txt(t + 0.15, t + 1.5, "NEW WORLD", 88, 0.36, "slam"))
             elif self.rec["edit"].get("react") and free(t + 0.05, t + 1.25):
                 texts.append(Txt(t + 0.05, t + 1.25, tx["react"], 104, 0.40, "slam"))
             if self.r.random() < 0.45 and free(t - self.bar, t - 0.1) and t - self.bar > 3.0:
                 texts.append(Txt(t - self.bar, t - 0.1, tx["before"], 76, 0.30, "pop"))
-        # worlds as you come into them
+        # through a door into another world (never its name: worlds and rooms are not named on screen)
         for k, u in enumerate(self.units):
-            if u.mom is None or u.mom.kind != "door" or u is self.cl or not u.mom.ev.get("to") or u.impact is None:
+            if u.mom is None or u.mom.kind != "door" or u is self.cl or u.impact is None:
                 continue
             t = self.T[k] + u.impact
             if free(t + 0.15, t + 1.4):
-                texts.append(Txt(t + 0.15, t + 1.4, P.WORLD_NAMES.get(u.mom.ev["to"], ""), 84, 0.36, "slam"))
+                texts.append(Txt(t + 0.15, t + 1.4, "NEW WORLD", 84, 0.36, "slam"))
         for k, u in enumerate(self.units):
             if u.kind == "replay" and free(self.T[k] + 0.1, self.T[k] + 1.3):
                 texts.append(Txt(self.T[k] + 0.1, self.T[k] + 1.3, "REPLAY", 64, 0.18, "pop"))
-        if self.rec["style"] == "tour":
-            seen = set()
-            for k, u in enumerate(self.units[1:-1], 1):
-                if u.take.i in seen:
-                    continue
-                seen.add(u.take.i)
-                t = self.T[k]
-                if free(t + 0.1, t + 1.3):
-                    texts.append(Txt(t + 0.1, t + 1.3, P.WORLD_NAMES.get(u.take.world, ""), 80, 0.36, "pop"))
         end_txt = tx["end"]
         if self.rec["edit"]["ending"] == "fail" and self.ending != "fail":
             # the bot never lost: no "so close"
@@ -1105,7 +1096,7 @@ def font_path(work):
         return out
     try:
         from fontTools.ttLib import TTFont
-        f = TTFont(os.path.join(ROOT, "kaanch-run", "fonts", "bricolage-800.woff2"))
+        f = TTFont(os.path.join(ROOT, "glass-run", "fonts", "bricolage-800.woff2"))
         f.flavor = None
         f.save(out)
         return out

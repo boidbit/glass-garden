@@ -11,12 +11,12 @@ android/capacitor-cordova-android-plugins/
 *.apk
 
 # the Godot game
-kaanch-run/.godot/
-kaanch-run/build/
-kaanch-run/export.log
-kaanch-run/android/
+glass-run/.godot/
+glass-run/build/
+glass-run/export.log
+glass-run/android/
 *.aab
 *.jks
 *.keystore.b64
 upload.keystore
-kaanch-run/override.cfg
+glass-run/override.cfg

@@ -113,7 +113,7 @@ jobs:
           pip install -q numpy opencv-python-headless pillow fonttools brotli
 
       - name: Import the project
-        working-directory: kaanch-run
+        working-directory: glass-run
         run: ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --import 2>&1 | tail -15 || true
 
       - name: Recipe

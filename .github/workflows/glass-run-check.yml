@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'kaanch-run/scripts/**'
+      - 'glass-run/scripts/**'
       - '.github/workflows/glass-run-check.yml'
 
 permissions:
@@ -40,11 +40,11 @@ jobs:
           unzip -q g.zip && rm g.zip
 
       - name: Import the project
-        working-directory: kaanch-run
+        working-directory: glass-run
         run: ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --import 2>&1 | tail -15 || true
 
       - name: Tests
-        working-directory: kaanch-run
+        working-directory: glass-run
         run: |
           G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
           for s in musictest balltest; do
@@ -65,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p /tmp/results && cp kaanch-run/balltest.log kaanch-run/musictest.log /tmp/results/ 2>/dev/null || true
+          mkdir -p /tmp/results && cp glass-run/balltest.log glass-run/musictest.log /tmp/results/ 2>/dev/null || true
           cd /tmp/results
           git init -q -b check-results
           git config user.name "github-actions"
