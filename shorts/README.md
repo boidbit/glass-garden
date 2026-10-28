@@ -12,6 +12,22 @@ to paste into YouTube.
 
 To make the same shorts again, give the seed the run printed in its **Plan the shorts** step.
 
+## Shorts with a meme
+
+**Actions → Glass Run shorts + memes** does everything above, and for some shorts cuts the same recorded takes a
+second time with a reaction meme from Giphy right after the biggest moment. Each short comes out as
+`short-01-fail.mp4` (as before) and `short-01-fail-meme.mp4`, so the two can be compared on YouTube. The `memes`
+choice picks which shorts get the second cut: `fail-clutch` (the default), `all`, or `none`.
+
+- Needs the repo secret `GIPHY_API_KEY` (Settings → Secrets and variables → Actions).
+- The words to search come from the style and the biggest moment (`oh no` after a miss, `wow` at a door, and so on;
+  see `meme.py`). Only G and PG clips of 1 to 8 seconds. The meme's search word and link are in its `.txt`/`.json`.
+- The clip is shown as a card on a blurred copy of itself, for 2 to 6 beats, never in the first shot or the ending.
+  Giphy's mp4s have no sound, so the music goes on under it, with a hit as it lands.
+- If Giphy gives nothing, `memes-backup.txt` (direct mp4 links, empty to begin with) is tried; after that the meme
+  cut is made without a meme. The plain short is made first and is never held up.
+- `python3 shorts/edit.py --selftest work --style tour --meme` checks the meme cut with a made-up clip, no web needed.
+
 ## What kind
 
 - **perfect**: a clean run, nothing missed
@@ -40,3 +56,5 @@ time): no samples, nothing to license. To hear one of each: `node shorts/music.m
 - `record.py`: plays and records the takes (the game's `--shorts` mode, Godot's Movie Maker)
 - `edit.py`: cuts the takes into the short; `--selftest` checks the whole cut on made-up takes
 - `music.mjs`: the music
+- `meme.py`: finds a meme on Giphy and cuts it to a card (only with `edit.py --meme`)
+- `memes-backup.txt`: direct links to use when Giphy gives nothing

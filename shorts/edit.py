@@ -167,6 +167,23 @@ class Take:
         return [e["f"] / FPS for e in self.events if e.get("e") == "break" and not e.get("crash")]
 
 
+class MemeTake:
+    """A meme clip (shorts/meme.py), already cut to a 1080x1920 card, used as a take of its own: no moments, no sound."""
+    i = 1000
+
+    def __init__(self, path):
+        self.avi = path
+        self.spec = {"name": "meme"}
+        self.nframes = probe_frames(path)
+        self.s0, self.s1 = 0.0, self.nframes / FPS
+        self.moments = []
+        self.world = ""
+        self.audio = np.zeros((SR, 2), np.float32)
+
+    def breaks(self):
+        return []
+
+
 class Reader:
     """Frames of one take, read in order from ffmpeg, with a little cache for looking back."""
 
@@ -320,6 +337,44 @@ class Editor:
             self.ending = "part2"
         self.texts = []
         self.glass_times = []
+        self.meme = None
+        self.meme_info = None
+
+    # the meme (only with --meme)
+    def add_meme(self, fake=None):
+        """a meme to cut in right after the biggest moment, as the reaction to it. Whatever goes wrong, the short is
+        cut without one."""
+        try:
+            import meme as M
+            moms = [m for t in self.takes for m in t.moments]
+            kind = max(moms, key=lambda m: m.w).kind if moms else ""
+            pick = M.pick(self.rec, kind, self.work, fake)
+            if pick is None:
+                print("meme: none found, the short is cut without one")
+                return
+            beats = min(6, self.beats_for(min(pick["dur"], 3.2)))
+            card = os.path.join(self.work, "meme-card.mp4")
+            if not M.card(pick["path"], card, beats * self.beat + 0.5, W, H):
+                return
+            take = MemeTake(card)
+            if take.nframes < beats * self.beat * FPS:
+                print("meme: the card is too short, the short is cut without one")
+                return
+            self.meme = Unit(take, "meme", beats, [(0, 1.0)], self.beat)
+            self.meme_info = {"term": pick["term"], "id": pick["id"], "title": pick["title"], "url": pick["url"], "beats": beats}
+            print("meme: '%s' %s, %d beats" % (pick["term"], pick["title"] or pick["id"], beats))
+        except Exception as e:  # noqa: BLE001
+            print("meme: %s: %s, the short is cut without one" % (type(e).__name__, e))
+
+    def place_meme(self, seq):
+        """right after the biggest moment (and its replay); with none, in the middle"""
+        cl = self.climax(seq)
+        at = len(seq) // 2
+        if cl is not None:
+            at = next(i for i, u in enumerate(seq) if u is cl) + 1
+            while at < len(seq) and seq[at].kind == "replay":
+                at += 1
+        seq.insert(at, self.meme)
 
     # sizes
     def beats_for(self, sec, even=True):
@@ -658,6 +713,9 @@ class Editor:
             if u.kind == "replay" or p.kind == "replay":
                 # into and out of a replay: a clear break, so it reads as a replay
                 u.trans = self.r.choice([x for x in ("flash", "glitch", "zoom") if x in self.pool] or ["flash"])
+            elif (u.kind == "meme" or p.kind == "meme") and u.kind != "end":
+                # into and out of the meme: a clear break
+                u.trans = self.r.choice(self.small)
             elif u.kind == "end" or u.kind == "ff" or p.kind == "ff":
                 u.trans = "cut"
             elif u.take is p.take:
@@ -675,10 +733,13 @@ class Editor:
         hook = self.make_hook()
         end = Unit(self.takes[-1], "end", 4, [(0, 1.0)], self.beat)
         budget = self.total - hook.beats - end.beats
-        chosen, used = self.select(self.candidates(), budget, hook)
-        seq, used = self.connect(chosen, used, budget, hook)
-        used = self.fill(seq, used, budget, hook)
-        used = self.replays(seq, used, budget)
+        # the beats of the meme (if there is one) are kept back, and it is put in after the rest is in place
+        mb = self.meme.beats if self.meme is not None else 0
+        chosen, used = self.select(self.candidates(), budget - mb, hook)
+        seq, used = self.connect(chosen, used, budget - mb, hook)
+        used = self.fill(seq, used, budget - mb, hook)
+        used = self.replays(seq, used, budget - mb)
+        used += mb
         # still short of play: a shorter short (down to 30 s), so the end is never a long still
         short = budget - used
         if short >= 4:
@@ -687,7 +748,9 @@ class Editor:
             self.total -= 4 * k
         end.beats = self.total - hook.beats - used
         self.drop = self.align(hook, seq, end)
-        last = next((u for u in reversed(seq) if u.kind != "replay"), hook)
+        if self.meme is not None:
+            self.place_meme(seq)
+        last = next((u for u in reversed(seq) if u.kind not in ("replay", "meme")), hook)
         over = next((m for m in last.take.moments if m.kind == "over"), None)
         if over is not None and last.span()[1] >= over.s - 0.5:
             # the run ran out of balls on screen: it ends as a fail, whatever end was planned
@@ -717,7 +780,7 @@ class Editor:
                     ut = u.out_time(s)
                     if ut is not None:
                         times.append(self.T[k] + ut)
-            if u.take.world not in worlds:
+            if u.kind != "meme" and u.take.world not in worlds:
                 worlds.append(u.take.world)
             if u.mom is not None and u.mom.kind == "door" and u.mom.ev.get("to") and u.mom.ev["to"] not in worlds:
                 worlds.append(u.mom.ev["to"])
@@ -781,6 +844,9 @@ class Editor:
                 cues.append({"t": t, "type": "whoosh", "dur": 0.4, "gain": 0.4})
             if k > 0 and u.trans in ("shatter", "flash"):
                 cues.append({"t": t, "type": "impact", "gain": 0.3})
+            elif u.kind == "meme":
+                # the clip has no sound of its own: a hit as it lands
+                cues.append({"t": t, "type": "impact", "gain": 0.35})
             if u.impact is not None and u.mom is not None and u.kind in ("moment", "hook") and u is not self.cl:
                 cues.append({"t": t + u.impact, "type": "impact", "gain": 0.22 + 0.025 * min(u.mom.w, 10.0)})
         if self.cl_t is not None:
@@ -1086,6 +1152,7 @@ class Editor:
                                  "from": round(a, 2), "to": round(b, 2), "how": u.how, "trans": u.trans,
                                  "moment": u.mom.kind if u.mom is not None else None, "freeze": round(u.freeze, 2)})
         out["texts"] = [{"at": round(t.t0, 2), "to": round(t.t1, 2), "text": t.text} for t in self.texts]
+        out["meme"] = self.meme_info if self.meme is not None else None
         return out
 
 
@@ -1244,7 +1311,7 @@ def shatter(img_b, frozen, p, cells):
 
 
 # ---------- the whole cut ----------
-def make(rec, takes_dir, out_dir, name):
+def make(rec, takes_dir, out_dir, name, meme=False, meme_fake=None):
     os.makedirs(out_dir, exist_ok=True)
     work = os.path.join(out_dir, name + "-work")
     os.makedirs(work, exist_ok=True)
@@ -1256,6 +1323,8 @@ def make(rec, takes_dir, out_dir, name):
         if t.ok() and size != (W, H):
             print("  not %dx%d: cut to shape from the middle, never stretched" % (W, H))
     ed = Editor(rec, takes, work)
+    if meme:
+        ed.add_meme(meme_fake)
     ed.plan()
     ed.plan_texts()
     summ = ed.summary()
@@ -1288,10 +1357,12 @@ def write_notes(rec, summ, path):
     with open(path, "w", encoding="utf-8") as f:
         f.write("TITLE:\n%s\n\nDESCRIPTION:\n%s\n\nSTYLE: %s   MUSIC: %s %d bpm   LENGTH: %.1f s\n"
                 % (title[:100], desc, rec["style"], rec["music"]["style"], rec["music"]["bpm"], summ["seconds"]))
+        if summ.get("meme"):
+            f.write("MEME: searched '%s', %s %s\n" % (summ["meme"]["term"], summ["meme"]["title"], summ["meme"]["url"]))
 
 
 # ---------- a check of the whole cut, with made-up takes ----------
-def selftest(work, style):
+def selftest(work, style, meme=False):
     os.makedirs(work, exist_ok=True)
     rec = P.recipe(424242, style)
     rec["edit"]["transitions"] = ["flash", "zoom", "whip", "glitch", "shatter", "iris"]
@@ -1340,12 +1411,23 @@ def selftest(work, style):
                 fh.write(json.dumps(e) + "\n")
     with open(os.path.join(work, "recipe.json"), "w") as f:
         json.dump(rec, f, indent=1)
-    mp4 = make(rec, tdir, os.path.join(work, "out"), "selftest-" + style)
+    fake = None
+    if meme:
+        # a made-up meme (small and wide, like the ones on Giphy), so the check needs no web
+        fake = os.path.join(work, "fake-meme.mp4")
+        run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=480x270:rate=15:duration=2.4",
+             "-pix_fmt", "yuv420p", "-c:v", "libx264", fake])
+    name = "selftest-" + style + ("-meme" if meme else "")
+    mp4 = make(rec, tdir, os.path.join(work, "out"), name, meme=meme, meme_fake=fake)
     p = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", mp4], capture_output=True, text=True)
     dur = float(p.stdout.strip() or 0)
-    print("selftest %s: %.1f s" % (style, dur))
+    print("selftest %s%s: %.1f s" % (style, " with a meme" if meme else "", dur))
     if not 29.0 <= dur <= 51.0:
         raise SystemExit("selftest: the short is %.1f s long" % dur)
+    if meme:
+        shots = json.load(open(os.path.join(work, "out", name + ".json")))["shots"]
+        if not any(s["kind"] == "meme" for s in shots):
+            raise SystemExit("selftest: the meme is not in the short")
 
 
 def main():
@@ -1356,12 +1438,13 @@ def main():
     ap.add_argument("--name", default="short")
     ap.add_argument("--selftest")
     ap.add_argument("--style", default="tour")
+    ap.add_argument("--meme", action="store_true", help="cut in a reaction meme from Giphy (shorts/meme.py)")
     a = ap.parse_args()
     if a.selftest:
         for style in a.style.split(","):
-            selftest(os.path.join(a.selftest, style), style)
+            selftest(os.path.join(a.selftest, style), style, a.meme)
         return
-    make(json.load(open(a.recipe)), a.takes, a.out, a.name)
+    make(json.load(open(a.recipe)), a.takes, a.out, a.name, meme=a.meme)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,3 @@
+# Backup memes: used only when Giphy gives nothing (no key, wrong key, too many searches).
+# One direct link to a short .mp4 (1 to 8 seconds) on each line; lines starting with # are skipped.
+# Empty is fine: then a short without a Giphy meme is cut without one.
