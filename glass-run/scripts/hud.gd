@@ -748,9 +748,7 @@ func _build_menu() -> Control:
 	row.add_theme_constant_override("separation", 56)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(row)
-	var lv := _icon_with_caption("flag", "First Light")
-	lv[1].pressed.connect(func(): play_mode.emit("level1"))
-	row.add_child(lv[0])
+	# no levels: the big button plays the endless run; Zen and Settings sit below it
 	var zen := _icon_with_caption("zen", "Zen")
 	zen[1].pressed.connect(func(): play_mode.emit("calm"))
 	row.add_child(zen[0])

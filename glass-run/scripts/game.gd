@@ -114,6 +114,8 @@ var risers: Array = []
 var roofs: Array = []
 var chandeliers: Array = []
 var floaters: Array = []
+var oddities: Array = []   # strange things off the way, turning: {node, axis, w, y, ph}
+var odd_orb_mat: StandardMaterial3D
 
 # testing from the command line
 var auto := false
@@ -220,7 +222,7 @@ func _ready() -> void:
 		if shorts:
 			_shorts_start()
 		else:
-			_start(test_mode if test_mode != "" else "level1", test_from)
+			_start(test_mode if test_mode != "" else "endless", test_from)
 	if test_screen != "":
 		_screen_test()
 
@@ -773,6 +775,7 @@ func _reset(m: String, from_room := 0) -> void:
 	roofs.clear()
 	chandeliers.clear()
 	floaters.clear()
+	oddities.clear()
 	power = ""
 	room = -1
 	world = ""
@@ -1056,6 +1059,7 @@ func _extras(d0: float, sec: String) -> void:
 		if randf() < 0.45:
 			_side_bonus(d0 + randf_range(2.0, 14.0), -1.0 if randf() < 0.5 else 1.0)
 	_spectacle(d0, sec)
+	_oddity(d0, sec)
 
 
 func _bonus_pane(g: GGate, poly: PackedVector2Array, d: float, color_id: int, pts := 15) -> GPane:
@@ -1187,7 +1191,7 @@ func _spawn_in(a: float, b: float) -> void:
 					continue
 				seed(hash([rr % Rooms.COUNT, e[0], rmx]))
 				remix = rmx
-				var hard: int = mini(6, int(e[2]) + rmx)
+				var hard: int = mini(6, int(e[2]) + rmx + rr / 12)
 				match e[1]:
 					"jars":
 						_jars(d)
@@ -1195,6 +1199,7 @@ func _spawn_in(a: float, b: float) -> void:
 						Obstacles.finale(self, d, Rooms.world_of(rr))
 					_:
 						Obstacles.build(self, e[1], d, hard)
+			_more_glass(rr, a, b)
 		return
 	while next_obs < b:
 		var d := next_obs
@@ -1227,6 +1232,33 @@ func _spawn_in(a: float, b: float) -> void:
 		if sec != "sky" and randf() < 0.35:
 			_jars(d + gap * 0.5)
 		next_obs += gap
+
+
+## deeper in the endless run, more glass: in a long gap between two of a room's own pieces, one more piece,
+## more often the further you are (none in the first three rooms, at most three in four gaps)
+const MORE_KINDS := ["pane", "grid", "stack", "split", "slide", "rise", "color_row", "layers"]
+
+
+func _more_glass(rr: int, a: float, b: float) -> void:
+	if rr < 3:
+		return
+	var es: Array = Rooms.entries(rr).duplicate()
+	es.sort_custom(func(x, y): return float(x[0]) < float(y[0]))
+	var rmx: int = rr / Rooms.COUNT
+	var prev_m := 0.0
+	var prev_kind := ""
+	for k in es.size() + 1:
+		var next_m: float = float(es[k][0]) if k < es.size() else ROOM_LEN - 22.0
+		var next_kind: String = es[k][1] if k < es.size() else "door"
+		var gap := next_m - prev_m
+		var mid := prev_m + gap * 0.5
+		var dm := rr * ROOM_LEN + mid
+		if gap >= 34.0 and mid > 18.0 and dm >= a and dm < b and prev_kind != "boss" and next_kind != "boss":
+			seed(hash([rr % Rooms.COUNT, int(mid), rmx, "more"]))
+			if randf() < minf(0.75, (rr - 2) * 0.09) and section_at(dm - 5.0) == section_at(dm + 5.0):
+				Obstacles.build(self, MORE_KINDS.pick_random(), dm, mini(6, 1 + rmx + rr / 8))
+		prev_m = next_m
+		prev_kind = next_kind
 
 
 # ---------- helpers the obstacles use ----------
@@ -1551,7 +1583,8 @@ func _process(delta: float) -> void:
 		# a wave in every room: slow just past the door, faster and faster towards the next one
 		var rn := _room_of(dist + 6.0)
 		var c0 := (rn / Rooms.CP_EVERY) * Rooms.CP_EVERY
-		var base := 6.0 + minf(rn % Rooms.COUNT, 49) * 0.07 + minf(rn / Rooms.COUNT, 3) * 1.0
+		# the further you go the faster it gets, room after room, all the way (it was flat after each lap of 50)
+		var base := 6.0 + minf(rn, 90) * 0.085
 		var f := clampf((dist + 6.0 - c0 * ROOM_LEN) / (ROOM_LEN * Rooms.CP_EVERY - 30.0), 0.0, 1.0)
 		want = base + 5.5 * f * f * (3.0 - 2.0 * f)
 	if mode == "level1":
@@ -1757,7 +1790,8 @@ func _crash(hit: Array, g: GGate) -> void:
 		sfx.play("shatter0", -4.0)
 		return
 	crashes += 1
-	balls = maxi(0, balls - CRASH_COST)
+	# deeper in, running into glass costs more (8 at first, up to 14)
+	balls = maxi(0, balls - CRASH_COST - (mini(6, _room_of(dist) / 5) if mode == "endless" else 0))
 	_ev("crash")
 	jar_streak = 0
 	multi = 1
@@ -3167,6 +3201,162 @@ func _column_shape() -> ArrayMesh:
 	return st.commit()
 
 
+# ---------- strange things off the way ----------
+## the kinds, in the order you first meet them: a few at the start, more of them (and more often) the further you go
+const ODD_KINDS := ["ring", "twist", "cubes", "stairs", "hang", "orb", "blades", "bridge"]
+
+
+## now and then, off the way where you can see out (the open sky, a great hall, a room open to the sky),
+## something strange, slowly turning: a great ring, a twisted tower, tumbling cubes, stairs to nowhere,
+## a tower hanging from the sky, a ringed orb, a burst of glass blades, a broken bridge floating
+func _oddity(d0: float, sec: String) -> void:
+	if mode != "endless" and mode != "calm":
+		return
+	var r := _room_of(d0)
+	var open_room := sec == "corridor" and _mood_at(d0 + 2.0) in Worlds.OPEN
+	if not (sec == "sky" or sec == "hall" or open_room):
+		return
+	if randf() > clampf(0.3 + r * 0.03, 0.3, 0.75):
+		return
+	var unlocked := clampi(3 + r / 2, 3, ODD_KINDS.size())
+	var kind: String = ODD_KINDS[randi() % unlocked]
+	var sd := -1.0 if randf() < 0.5 else 1.0
+	var d := d0 + randf_range(2.0, 14.0)
+	var pos: Vector3
+	var sc := 1.0
+	if sec == "sky":
+		# high up and out past the floating mountains
+		pos = Vector3(sd * randf_range(24.0, 40.0), randf_range(12.0, 22.0), -d)
+		sc = randf_range(1.6, 2.4)
+	elif sec == "hall":
+		# in the hall, out past the crystals on stands
+		pos = Vector3(sd * randf_range(12.5, 15.0), randf_range(3.0, 7.0), -d)
+		sc = randf_range(0.6, 0.85)
+		if kind in ["hang", "bridge"]:
+			kind = "twist"
+	else:
+		pos = Vector3(sd * randf_range(16.0, 28.0), randf_range(3.0, 10.0), -d)
+		sc = randf_range(1.0, 1.5)
+		if kind == "hang":
+			kind = "ring"
+	var n := _odd_mesh(kind, _world_at(d))
+	n.position = pos
+	n.scale = Vector3.ONE * sc
+	decor(new_gate("odd", d), n)
+	var axis := Vector3.UP
+	if kind == "ring":
+		axis = Vector3(0, 0, 1)
+	elif kind == "cubes" or kind == "blades":
+		axis = Vector3(1, 1, 0.3).normalized()
+	oddities.append({"node": n, "axis": axis, "w": randf_range(0.2, 0.55) * (1.0 if randf() < 0.5 else -1.0), "y": pos.y, "ph": randf() * TAU})
+	_ev("oddity", {"kind": kind})
+
+
+func _odd_mesh(kind: String, w: String) -> Node3D:
+	var T: Dictionary = Worlds.TUNE[w]
+	var acc: Color = Worlds.def(w).accent
+	var body: Color = T.wall.lerp(Color("0e1420"), 0.3)
+	var lite: Color = T.wall2 * 0.8
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var gs := SurfaceTool.new()
+	gs.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var root := Node3D.new()
+	match kind:
+		"ring":
+			# a great ring standing on its edge, turning about you
+			Worlds.arc_boxes(st, Vector3.ZERO, 5.0, 0.0, TAU, 28, 0.7, 0.9, body)
+			Worlds.arc_boxes(gs, Vector3(0, 0, 0.5), 4.55, 0.0, TAU, 28, 0.12, 0.1, acc)
+			Worlds.arc_boxes(gs, Vector3(0, 0, -0.5), 4.55, 0.0, TAU, 28, 0.12, 0.1, acc)
+			Worlds.arc_boxes(st, Vector3.ZERO, 2.6, 0.0, TAU, 18, 0.25, 0.4, lite)
+		"twist":
+			# a tower that turns on itself as it goes up
+			for i in 14:
+				var b := Basis(Vector3.UP, i * 0.18)
+				Worlds._box_xf(st, Transform3D(b.scaled(Vector3(2.4, 0.9, 2.4)), Vector3(0, i * 0.95 - 4.0, 0)), body if i % 2 == 0 else lite * 0.7)
+				if i % 3 == 0:
+					Worlds._box_xf(gs, Transform3D(b.scaled(Vector3(2.5, 0.08, 2.5)), Vector3(0, i * 0.95 - 3.53, 0)), acc)
+		"cubes":
+			# a cloud of cubes coming apart, some of them lit from inside
+			for i in 11:
+				var c := Vector3(randf_range(-3.2, 3.2), randf_range(-3.2, 3.2), randf_range(-3.2, 3.2))
+				var s := randf_range(0.6, 1.7)
+				var b := Basis.from_euler(Vector3(randf() * TAU, randf() * TAU, randf() * TAU))
+				Worlds._box_xf(gs if i % 3 == 0 else st, Transform3D(b.scaled(Vector3.ONE * s), c), acc * 0.8 if i % 3 == 0 else body)
+		"stairs":
+			# stairs going round and up to nowhere
+			for i in 18:
+				var a := i * 0.42
+				var b := Basis(Vector3.UP, -a)
+				var c := Vector3(cos(a) * 2.4, i * 0.42 - 3.5, sin(a) * 2.4)
+				Worlds._box_xf(st, Transform3D(b.scaled(Vector3(0.6, 0.16, 1.8)), c), lite)
+				Worlds._box_xf(gs, Transform3D(b.scaled(Vector3(0.62, 0.04, 1.82)), c + Vector3(0, 0.1, 0)), acc * 0.7)
+			Worlds.box(st, Vector3(0, 0.0, 0), Vector3(0.4, 8.0, 0.4), body)
+		"hang":
+			# a tower hanging upside down from the sky, its point towards the ground
+			Worlds.box(st, Vector3(0, 14.0, 0), Vector3(4.0, 28.0, 4.0), body)
+			var ws := [3.4, 2.6, 1.8, 1.0, 0.4]
+			for i in ws.size():
+				Worlds.box(st, Vector3(0, -0.5 - i * 1.0, 0), Vector3(ws[i], 1.0, ws[i]), body * (1.0 - i * 0.08))
+			var y := 2.0
+			while y < 26.0:
+				Worlds.box(gs, Vector3(0, y, 2.02), Vector3(3.2, 0.5, 0.04), T.lights[0] * randf_range(0.5, 0.9))
+				Worlds.box(gs, Vector3(2.02, y, 0), Vector3(0.04, 0.5, 3.2), T.lights[0] * randf_range(0.5, 0.9))
+				y += 2.0
+			Worlds.box(gs, Vector3(0, -5.2, 0), Vector3(0.3, 0.3, 0.3), acc)
+		"orb":
+			# a great orb, lit from inside, with a ring round it
+			if odd_orb_mat == null:
+				odd_orb_mat = StandardMaterial3D.new()
+				odd_orb_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				odd_orb_mat.albedo_color = Color.WHITE
+			var sm := SphereMesh.new()
+			sm.radius = 2.6
+			sm.height = 5.2
+			sm.radial_segments = 24
+			sm.rings = 12
+			var om := MeshInstance3D.new()
+			om.mesh = sm
+			var mat := odd_orb_mat.duplicate() as StandardMaterial3D
+			mat.albedo_color = acc.lerp(Color.WHITE, 0.35)
+			om.material_override = mat
+			om.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			root.add_child(om)
+			var tilt := Transform3D(Basis(Vector3(1, 0, 0), 1.25), Vector3.ZERO)
+			var rs := SurfaceTool.new()
+			rs.begin(Mesh.PRIMITIVE_TRIANGLES)
+			Worlds.arc_boxes(rs, Vector3.ZERO, 4.3, 0.0, TAU, 32, 0.35, 0.05, lite)
+			var ring := MeshInstance3D.new()
+			rs.set_material(Worlds.lit_mat)
+			ring.mesh = rs.commit()
+			ring.transform = tilt
+			root.add_child(ring)
+		"blades":
+			# a burst of long glass blades, pointing every way
+			for i in 9:
+				var b := Basis.from_euler(Vector3(randf() * TAU, randf() * TAU, randf() * TAU))
+				Worlds._box_xf(gs if i % 2 == 0 else st, Transform3D(b.scaled(Vector3(0.25, 6.0, 0.6)), Vector3.ZERO), Color("bfe8ff") * 0.7 if i % 2 == 0 else lite)
+			Worlds.box(gs, Vector3.ZERO, Vector3(0.8, 0.8, 0.8), acc)
+		"bridge":
+			# a bridge broken in pieces, the pieces floating apart
+			for i in 7:
+				var x := (i - 3) * 2.2
+				var off := Vector3(0, randf_range(-1.0, 1.0) * absf(i - 3) * 0.4, randf_range(-0.6, 0.6))
+				var b := Basis(Vector3(0, 0, 1), randf_range(-0.25, 0.25) * absf(i - 3) * 0.4)
+				Worlds._box_xf(st, Transform3D(b.scaled(Vector3(2.0, 0.4, 2.4)), Vector3(x, 0, 0) + off), lite)
+				Worlds._box_xf(gs, Transform3D(b.scaled(Vector3(2.0, 0.06, 0.06)), Vector3(x, 0.25, 1.15) + off), acc)
+				Worlds._box_xf(st, Transform3D(b.scaled(Vector3(0.12, 1.0, 0.12)), Vector3(x, 0.7, 1.1) + off), body)
+	if kind != "orb":
+		var m := MeshInstance3D.new()
+		st.set_material(Worlds.lit_mat)
+		m.mesh = st.commit()
+		gs.set_material(Worlds.glow_mat)
+		gs.commit(m.mesh)
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(m)
+	return root
+
+
 func _spectacle_step(dt: float) -> void:
 	# pillars coming up out of the floor
 	var i := risers.size() - 1
@@ -3241,6 +3431,14 @@ func _spectacle_step(dt: float) -> void:
 			fn.position.y = float(f.y) + sin(t * 0.4 + float(f.ph)) * 0.8
 	while floaters.size() and not is_instance_valid(floaters[0].node):
 		floaters.pop_front()
+	# strange things turning off the way
+	for o in oddities:
+		if is_instance_valid(o.node):
+			var on: Node3D = o.node
+			on.rotate(o.axis, float(o.w) * dt)
+			on.position.y = float(o.y) + sin(t * 0.5 + float(o.ph)) * 0.6
+	while oddities.size() and not is_instance_valid(oddities[0].node):
+		oddities.pop_front()
 
 
 func _chandelier_smash(c: Dictionary) -> void:
