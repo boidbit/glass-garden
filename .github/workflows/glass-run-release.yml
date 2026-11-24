@@ -12,7 +12,7 @@ on:
         required: false
         default: '1.0'
       version_code:
-        description: 'Version code for Play: a whole number higher than your last upload (not 1.01). Empty = automatic'
+        description: 'Version code for Play: a whole number higher than any code uploaded before (not 1.01). Leave empty: automatic, always higher'
         required: false
         default: ''
 
@@ -122,10 +122,12 @@ jobs:
           fi
           echo "VERSION_NAME=$VN" >> "$GITHUB_ENV"
           sed -i "s|^version/name=.*|version/name=\"$VN\"|" glass-run/export_presets.cfg
-          # Play needs a versionCode that goes up with every upload: the run number unless you gave one.
-          # This workflow ran 3 times under its old file name, and a renamed workflow counts its runs from 1 again:
-          # 10 is added, so an automatic code always comes out above every code uploaded before the rename.
-          VC="${INPUT_VERSION_CODE:-$((GITHUB_RUN_NUMBER + 10))}"
+          # Play needs a versionCode higher than every code it has seen, even from a build that was uploaded and
+          # then thrown away. Counting runs did not do that (a renamed workflow counts from 1 again, and a code
+          # once uploaded can never be used again), so the automatic code is the minutes since 1 January 2026:
+          # it only goes up, about 470000 in late 2026, and stays under Play's limit (2100000000) for 4000 years.
+          AUTO=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          VC="${INPUT_VERSION_CODE:-$AUTO}"
           if ! [[ "$VC" =~ ^[0-9]+$ ]] || [ "$VC" -lt 1 ] || [ "$VC" -gt 2100000000 ]; then
             echo "::error title=Bad version code::the version code must be a whole number from 1 to 2100000000 (put 1.01 in Version name instead), got: $VC"
             exit 1
