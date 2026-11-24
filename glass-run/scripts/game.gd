@@ -139,6 +139,7 @@ var pow_rate := 0.2
 var run_seed := -1
 var hud_balls := false
 var fov_add := 17.0
+const PORTRAIT_FOV_ADD := 17.0   # the angle added on an upright phone (9:16), less on a squarer screen
 var quit_on := ""
 var quit_after := 3.0
 var max_time := 0.0
@@ -1693,6 +1694,12 @@ func _place_camera(dt: float) -> void:
 		# a tall picture (the angle is top to bottom): about 80 degrees, so the way is not squeezed at the sides
 		# and nothing near the top or bottom edge is pulled long
 		cam.fov += fov_add
+	else:
+		# the game is played upright: on a tall screen the same wider angle, so the way and what stands at its
+		# sides are not squeezed; a wide screen (a tablet held sideways, a computer) keeps the angle it had
+		var vs := get_viewport().get_visible_rect().size
+		if vs.y > vs.x:
+			cam.fov += PORTRAIT_FOV_ADD * clampf((vs.y / vs.x - 1.0) / 0.78, 0.0, 1.0)
 
 
 func _move_gates() -> void:

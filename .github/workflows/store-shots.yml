@@ -2,7 +2,7 @@ name: Glass Run store shots
 
 # plays the Godot game by itself on a virtual screen and saves real gameplay frames for the Play Store listing.
 # the frames are pushed to the "store-shots" branch (not main, so the repo history stays small).
-# run it by hand (Actions -> Glass Run store shots -> Run workflow) or change this file (run 2: game title is now GLASS RUN).
+# run it by hand (Actions -> Glass Run store shots -> Run workflow) or change this file (run 3: the game is upright now, new worlds).
 
 on:
   workflow_dispatch:
@@ -16,8 +16,9 @@ permissions:
 
 env:
   GODOT_VERSION: 4.7.2
-  WIDTH: 1920
-  HEIGHT: 1080
+  # the game is played upright: Play Store phone screenshots, 9:16
+  WIDTH: 1080
+  HEIGHT: 1920
 
 jobs:
   capture:
@@ -27,15 +28,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: level1
-            args: --auto --mode=level1 --shots=40,150,280,400,520,640 --quit-at=650
-          - name: venice
+          - name: neon
+            args: --auto --mode=endless --from=0 --shots=60,150,280,400,520 --quit-at=530
+          - name: ocean
             args: --auto --mode=endless --from=3 --shots=630,700,770,850 --quit-at=860
-          - name: lanterns
+          - name: aurora
             args: --auto --mode=endless --from=6 --shots=1230,1300,1370,1450 --quit-at=1460
-          - name: mosaic
+          - name: dunes
             args: --auto --mode=endless --from=9 --shots=1830,1900,1970,2050 --quit-at=2060
-          - name: palace
+          - name: ice
             args: --auto --mode=endless --from=12 --shots=2430,2500,2570,2650 --quit-at=2660
           - name: screens
             args: ''
@@ -84,7 +85,7 @@ jobs:
               -- --shot-dir="$OUT/${NAME}_" $1 2>&1 | tail -25 || true
           }
           if [ "$NAME" = "screens" ]; then
-            for s in menu levels done over settings; do
+            for s in menu over settings; do
               run "--screen=$s"
             done
           else

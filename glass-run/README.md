@@ -2,7 +2,7 @@
 
 A glass-breaking run through five made-up worlds of glass and light, made with Godot (4.7.2 for the Play Store build) (separate from the web game, which stays as it is).
 
-You fly forward through halls of glass. Tap to throw heavy iron balls and break the glass before you reach it. No glass takes more than two balls. Running into glass costs balls; when they run out, the run ends. The only sounds are the balls, the glass and calm music, and nothing is written on the screen while you play but the number of balls, which turns red and beats when you are running low. Crystals give balls (five each; a checkpoint door gives ten, and running into glass costs eight): hit them where they stand at the sides, float on islands below the sky, or hang in the way.
+The game is played upright, in portrait, with one thumb (720×1280 base; on a tall screen the camera takes a wider angle, about 80 degrees top to bottom, so the way and what stands beside it are not squeezed). You fly forward through halls of glass. Tap to throw heavy iron balls and break the glass before you reach it. No glass takes more than two balls. Running into glass costs balls; when they run out, the run ends. The only sounds are the balls, the glass and calm music, and nothing is written on the screen while you play but the number of balls, which turns red and beats when you are running low. Crystals give balls (five each; a checkpoint door gives ten, and running into glass costs eight): hit them where they stand at the sides, float on islands below the sky, or hang in the way.
 
 ## Modes
 
