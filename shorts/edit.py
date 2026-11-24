@@ -121,7 +121,7 @@ class Take:
         start = next((e for e in self.events if e.get("e") == "start"), None)
         self.started = start is not None
         self.f0 = start["f"] if start else 0
-        self.world = (start or {}).get("world") or spec.get("world", "cathedral")
+        self.world = (start or {}).get("world") or spec.get("world", "neon")
         self.s0 = self.f0 / FPS + 0.15
         self.s1 = max(self.s0, self.nframes / FPS - 0.1)
         self.moments = self._moments()

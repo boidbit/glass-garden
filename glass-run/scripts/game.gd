@@ -7,14 +7,19 @@ extends Node3D
 
 const EYE := 2.2
 const ROOM_LEN := 200.0
-const START_BALLS := 30
+const START_BALLS := 40
+# the balls in and out: a good player (most throws hit, the crystals taken) about holds their own,
+# so a run ends on mistakes, not on a slow bleed (with 30, -10 and +4 a near-perfect bot ran dry at 1 km)
+const JAR_BALLS := 5      # a crystal
+const DOOR_BALLS := 10    # breaking a checkpoint door
+const CRASH_COST := 8     # running into glass
 const SEG := Worlds.SEG
 const HALF_W := Worlds.HALF_W
 const CEIL := Worlds.CEIL
 # a heavy steel ball: slower off the hand than before, dropping in a firmer curve
 const BALL_SPEED := 38.0
-const GRAV := 13.0
-const BALL_R := 0.21
+const GRAV := 14.0
+const BALL_R := 0.3     # a big heavy ball you can see fly (it was 0.21)
 
 enum S { MENU, PLAY, PAUSE, OVER, DONE }
 
@@ -460,6 +465,8 @@ func _make_scene() -> void:
 	crack_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	crack_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	crack_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# a crack is cut to its glass, so past its own square it must be clear, not the texture again
+	crack_mat.texture_repeat = false
 	mark_mat = StandardMaterial3D.new()
 	mark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mark_mat.albedo_color = Color("ff5a3c")
@@ -480,8 +487,8 @@ func _warm_up() -> void:
 	var sq := Glass.rect(-0.5, 0.5, -0.5, 0.5)
 	var meshes := [Glass.slab_mesh(sq, "thin"), Glass.slab_mesh(sq, "mirror"), Glass.slab_mesh(sq, "thin", 1.0, 0),
 		crystal_mesh, prism_mesh, column_mesh, jar_mesh, marble_mesh]
-	var mats := [Worlds.lit_mat, Worlds.glow_mat, Worlds.shaft_mat, Worlds.tex_like("cathedral"), Worlds.tex_like("palace"),
-		Worlds.tex_like("shoji"), shadow_mat, berg_mat, chand_mat, jar_mat, hub_mat, steel_mat, crack_mat, mark_mat, frame_mat,
+	var mats := [Worlds.lit_mat, Worlds.glow_mat, Worlds.shaft_mat, Worlds.tex_like("neon"), Worlds.tex_like("ice"),
+		Worlds.tex_like("panel"), shadow_mat, berg_mat, chand_mat, jar_mat, hub_mat, steel_mat, crack_mat, mark_mat, frame_mat,
 		fx.line_node.material_override]
 	mats.append_array(marble_mats)
 	mats.append_array(pow_mats)
@@ -1088,15 +1095,11 @@ func _island(d: float) -> void:
 		Worlds.box(st, Vector3(cx, -1.6 - i * 0.3, cz), Vector3(0.2, 0.9, 0.2), Color("8fd8d0"))
 	# something of the world standing on it
 	match w:
-		"venice":
+		"ocean", "ice":
 			for q in [Vector2(-2.0, 1.7), Vector2(2.0, -1.7)]:
-				for k in 4:
-					Worlds.box(st, Vector3(q.x, 0.25 + k * 0.5, q.y), Vector3(0.16, 0.5, 0.16), Color("c8302c") if k % 2 == 0 else Color("f4f0e8"))
-		"lanterns", "cathedral", "mosaic":
+				Worlds.box(st, Vector3(q.x, 0.8, q.y), Vector3(0.16, 1.6, 0.16), Color("c8d4dc"))
+		"aurora", "neon", "dunes":
 			Worlds.box(st, Vector3(-2.0, 0.9, 1.7), Vector3(0.1, 1.8, 0.1), Color("2b3138"))
-		"palace":
-			for q in [Vector2(-1.9, 1.6), Vector2(1.9, 1.6)]:
-				Worlds.box(st, Vector3(q.x, 0.7, q.y), Vector3(0.14, 1.4, 0.14), Color("e8b64a"))
 	st.set_material(Worlds.lit_mat)
 	var m := MeshInstance3D.new()
 	m.mesh = st.commit()
@@ -1107,11 +1110,11 @@ func _island(d: float) -> void:
 	Worlds.box(gs, Vector3(0, -0.28, -2.04), Vector3(4.4, 0.05, 0.04), acc * 0.8)
 	Worlds.box(gs, Vector3(2.34, -0.28, 0), Vector3(0.04, 0.05, 3.8), acc * 0.8)
 	Worlds.box(gs, Vector3(-2.34, -0.28, 0), Vector3(0.04, 0.05, 3.8), acc * 0.8)
-	if w in ["lanterns", "cathedral", "mosaic"]:
+	if w in ["aurora", "neon", "dunes"]:
 		Worlds.box(gs, Vector3(-2.0, 1.95, 1.7), Vector3(0.3, 0.4, 0.3), T.lights[0])
-	elif w == "palace":
-		for q in [Vector2(-1.9, 1.6), Vector2(1.9, 1.6)]:
-			Worlds.box(gs, Vector3(q.x, 1.5, q.y), Vector3(0.22, 0.22, 0.22), Color("ffd896"))
+	else:
+		for q in [Vector2(-2.0, 1.7), Vector2(2.0, -1.7)]:
+			Worlds.box(gs, Vector3(q.x, 1.75, q.y), Vector3(0.26, 0.26, 0.26), acc)
 	gs.set_material(Worlds.glow_mat)
 	gs.commit(m.mesh)
 	m.position = Vector3(x, y, -d)
@@ -1754,7 +1757,7 @@ func _crash(hit: Array, g: GGate) -> void:
 		sfx.play("shatter0", -4.0)
 		return
 	crashes += 1
-	balls = maxi(0, balls - 10)
+	balls = maxi(0, balls - CRASH_COST)
 	_ev("crash")
 	jar_streak = 0
 	multi = 1
@@ -1935,8 +1938,9 @@ func _update_balls(dt: float) -> void:
 				var thick: float = Glass.KINDS[best.kind].t
 				var res := _hit(best, best_lp, v.normalized(), b)
 				if res == "break" or res == "open":
-					# it spends itself on the glass: a little way on through the hole, then it falls
-					v = v.normalized() * minf(vin, 1.6) + Vector3(0, -0.5, 0)
+					# it spends itself on the glass: on through the hole, slowed more by thick glass, and it falls
+					var keep := clampf(0.3 - thick * 0.35, 0.06, 0.3)
+					v = v * keep + Vector3(randf_range(-0.6, 0.6), -0.8, 0)
 					nb = hit_at + v.normalized() * 0.03
 					shake = maxf(shake, 0.06 + minf(thick, 1.0) * 0.18)
 				elif res == "reflect":
@@ -1945,7 +1949,7 @@ func _update_balls(dt: float) -> void:
 					nb = hit_at + nrm * 0.06
 				else:
 					# it holds: a dull knock, the ball bounces back a little off it and drops
-					v = nrm * minf(vin * 0.1, 3.5) + Vector3(randf_range(-0.4, 0.4), -0.5, 0)
+					v = nrm * minf(vin * 0.22, 7.0) + Vector3(randf_range(-0.8, 0.8), 1.2, 0)
 					nb = hit_at + nrm * 0.06
 					shake = maxf(shake, 0.1)
 					sfx.play("thud", -6.0, randf_range(0.8, 0.95))
@@ -1966,21 +1970,27 @@ func _update_balls(dt: float) -> void:
 				_target_burst(tg)
 		var bsec := section_at(-nb.z)
 		if nb.y < BALL_R and bsec != "sky":
-			# iron does not bounce: it lands with a thud and rolls on
+			# heavy iron: a low bounce or two off the floor, each lower, then it rolls on
 			nb.y = BALL_R
-			if not b.landed and v.y < -1.0:
+			var vy := -v.y
+			if vy > 1.0:
+				if not b.landed or vy > 3.0:
+					sfx.play("roll", -14.0 + minf(vy, 8.0), randf_range(0.9, 1.1))
+					if -nb.z - dist < 14.0:
+						shake = maxf(shake, minf(vy, 8.0) * 0.008)
 				b.landed = true
-				sfx.play("roll", -14.0, randf_range(0.9, 1.1))
-			v.y = absf(v.y) * 0.06
-			v.x *= 0.92
-			v.z *= 0.97
+				v.y = vy * 0.38
+			else:
+				v.y = 0.0
+			v.x *= 0.95
+			v.z *= 0.985
 		var lim := INF if bsec == "sky" else (Worlds.HALL_W - 0.1 if bsec == "hall" else HALF_W) - BALL_R
 		if absf(nb.x) > lim:
 			# the side wall: a heavy glancing knock, not a bounce like rubber
 			nb.x = signf(nb.x) * lim
 			var vx := absf(v.x)
-			v.x = -v.x * 0.3
-			v.z *= 0.82
+			v.x = -v.x * 0.45
+			v.z *= 0.85
 			if vx > 2.0 and b.walls < 2:
 				b.walls += 1
 				var wp := Vector3(signf(nb.x) * (lim + BALL_R), nb.y, nb.z)
@@ -1988,6 +1998,11 @@ func _update_balls(dt: float) -> void:
 				if -nb.z - dist < 22.0:
 					shake = maxf(shake, 0.05)
 					sfx.play("thud", -12.0 + minf(vx, 8.0), randf_range(1.0, 1.2))
+		# it turns as it goes, so you see it roll along the floor and spin through the air
+		var step := nb - node.position
+		var ax := Vector3.UP.cross(step)
+		if ax.length() > 1e-5:
+			node.rotate(ax.normalized(), step.length() / BALL_R)
 		node.position = nb
 		b.v = v
 		b.life += dt
@@ -1995,7 +2010,7 @@ func _update_balls(dt: float) -> void:
 		pts.append(nb)
 		if pts.size() > 7:
 			pts.pop_front()
-		if b.life > 2.2 or -nb.z < dist - 3.0:
+		if b.life > 3.0 or -nb.z < dist - 3.0:
 			node.queue_free()
 			flying.remove_at(i)
 		i -= 1
@@ -2149,16 +2164,37 @@ func _hit(p: GPane, lp: Vector2, dir: Vector3, _b: Dictionary) -> String:
 	return "hold"
 
 
-func _crack(p: GPane, lp: Vector2) -> void:
+## a crack drawn on glass, centred at `at` and `sz` across, cut to the glass's own shape `poly`,
+## so none of it shows past the edge of the glass or in a hole broken through it (it stands in the air otherwise)
+func _crack_on(parent: Node3D, poly: PackedVector2Array, at: Vector2, sz: float, z: float) -> MeshInstance3D:
+	var rot := randf() * TAU
+	var sq := PackedVector2Array()
+	for k in 4:
+		sq.append(at + Vector2(sz * 0.5, 0).rotated(rot + TAU * (k + 0.5) / 4.0) * sqrt(2.0))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var any := false
+	for part: PackedVector2Array in Geometry2D.intersect_polygons(poly, sq):
+		var tri := Geometry2D.triangulate_polygon(part)
+		for i in tri:
+			var v: Vector2 = part[i]
+			var u: Vector2 = (v - at).rotated(-rot) / sz
+			st.set_uv(Vector2(0.5 + u.x, 0.5 - u.y))
+			st.add_vertex(Vector3(v.x - at.x, v.y - at.y, 0))
+			any = true
 	var q := MeshInstance3D.new()
-	var qm := QuadMesh.new()
-	var sz := 1.1 + p.cracks.size() * 0.35
-	qm.size = Vector2(sz, sz)
-	q.mesh = qm
+	if any:
+		q.mesh = st.commit()
 	q.material_override = crack_mat
-	q.position = Vector3(lp.x, lp.y, Glass.KINDS[p.kind].t * 0.5 + 0.01)
-	q.rotation.z = randf() * TAU
-	p.node.add_child(q)
+	q.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	q.position = Vector3(at.x, at.y, z)
+	parent.add_child(q)
+	return q
+
+
+func _crack(p: GPane, lp: Vector2) -> void:
+	var sz := 1.1 + p.cracks.size() * 0.35
+	var q := _crack_on(p.node, p.poly, lp, sz, Glass.KINDS[p.kind].t * 0.5 + 0.01)
 	p.cracks.append(q)
 	q.scale = Vector3.ONE * 0.2
 	var k := [0.0]
@@ -2311,15 +2347,8 @@ func break_pane(p: GPane, lp: Vector2, dir: Vector3, crash := false, quiet := fa
 		panes.append(q)
 		# the crack running into it from the hole
 		if cc.distance_to(lp) < 1.9 and randf() < 0.45:
-			var cq := MeshInstance3D.new()
-			var qm := QuadMesh.new()
-			qm.size = Vector2(1.1, 1.1)
-			cq.mesh = qm
-			cq.material_override = crack_mat
 			var toward := (lp - cc)
-			cq.position = Vector3(toward.x * 0.35, toward.y * 0.35, Glass.KINDS[p.kind].t * 0.5 + 0.01)
-			cq.rotation.z = randf() * TAU
-			mi.add_child(cq)
+			_crack_on(mi, local, toward * 0.35, 1.1, Glass.KINDS[p.kind].t * 0.5 + 0.01)
 	p.node.queue_free()
 	var cap := 260 if save.quality > 0 else 120
 	while shards.size() > cap:
@@ -2397,11 +2426,11 @@ func _target_burst(tg: GTarget) -> void:
 func _jar_got(_tg: GTarget) -> void:
 	jars_got += 1
 	# one ball breaks one glass now, so a crystal gives a little more
-	balls += 4
+	balls += JAR_BALLS
 	_ev("crystal")
 	jar_streak += 1
 	var at := cam.unproject_position(_tg.node.global_position) if not cam.is_position_behind(_tg.node.global_position) else Vector2(640, 300)
-	hud.popup("+4", at)
+	hud.popup("+%d" % JAR_BALLS, at)
 	var want := 3 if jar_streak >= 25 else 2 if jar_streak >= 10 else 1
 	if want > multi:
 		multi = want
@@ -3253,7 +3282,7 @@ func _door_burst(g: GGate) -> void:
 	look_fast_until = t + 3.5
 	hud.flash_screen(Color.WHITE, 0.7, 1.0)
 	if mode != "calm":
-		balls += 5
+		balls += DOOR_BALLS
 	var c := Vector3(0, EYE, -g.d)
 	fx.flash(c, Color("ffffff"), 6.0)
 	fx.spark(c, Color("e8f6ff"), 90, 2.2)
@@ -3340,7 +3369,7 @@ func _test_room() -> void:
 	_reset("gallery")
 	mode = "gallery"
 	state = S.MENU
-	_set_world("cathedral", true)
+	_set_world("neon", true)
 	for c in root3d.get_children():
 		c.queue_free()
 	segs.clear()
@@ -3355,7 +3384,7 @@ func _test_room() -> void:
 	speed = 8.0
 	next_seg = 0
 	while next_seg * SEG < 60.0:
-		root3d.add_child(Worlds.build("cathedral", next_seg * SEG, next_seg * 31 + 7))
+		root3d.add_child(Worlds.build("neon", next_seg * SEG, next_seg * 31 + 7))
 		next_seg += 1
 	broken = 0
 	hit_calls = 0
@@ -3463,10 +3492,13 @@ func _ball_tests() -> void:
 	_test_room()
 	b = _fire(Vector3(0.75, 0.05, -0.66).normalized())
 	var max_x := 0.0
+	var min_vx := 0.0
 	for k in 60:
 		_sim(1.0 / 60.0)
 		max_x = maxf(max_x, absf(b.node.position.x))
-	_report("side wall", max_x <= HALF_W - BALL_R + 0.001 and (b.v as Vector3).x < 0.0, "max_x=%.2f vx=%.2f" % [max_x, (b.v as Vector3).x])
+		min_vx = minf(min_vx, (b.v as Vector3).x)
+	# it never goes into a wall, and it knocks back off the first (it may cross to the other wall after)
+	_report("side wall", max_x <= HALF_W - BALL_R + 0.001 and min_vx < 0.0, "max_x=%.2f back=%.2f" % [max_x, min_vx])
 	# 6. a steel grille: it cannot get through
 	_test_room()
 	var gg := new_gate("grille", 12.0)

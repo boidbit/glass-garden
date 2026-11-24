@@ -55,7 +55,7 @@ jobs:
             echo "::error title=Tests failed::see the log above"
             exit 1
           fi
-          if ! grep -q "music cathedral" musictest.log; then
+          if ! grep -q "music neon" musictest.log; then
             echo "::error title=Music test did not run::no music result lines"
             exit 1
           fi
