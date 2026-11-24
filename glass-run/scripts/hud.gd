@@ -852,11 +852,7 @@ func _build_settings() -> Control:
 	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(t)
 	var x := IconButton.new("close", 58.0)
-	x.pressed.connect(func():
-		c[0].visible = false
-		_reset_armed = false
-		if _settings_from:
-			_fade_in(_settings_from))
+	x.pressed.connect(_close_settings)
 	head.add_child(x)
 	box.add_child(head)
 	_gap(box, 6)
@@ -902,6 +898,28 @@ func _build_settings() -> Control:
 	box.add_child(ver)
 	c[0].set_meta("rows", [])
 	return c[0]
+
+
+func _close_settings() -> void:
+	settings.visible = false
+	_reset_armed = false
+	if _settings_from == menu:
+		# after a reset the best run under the play button is gone too
+		show_menu(opts)
+	elif _settings_from:
+		_fade_in(_settings_from)
+
+
+## the phone's back button on the menus: closes the card on top and says so, or false when there is none
+func back() -> bool:
+	if settings and settings.visible:
+		_close_settings()
+		return true
+	if start_panel and start_panel.visible:
+		start_panel.visible = false
+		_fade_in(menu)
+		return true
+	return false
 
 
 func _paint_quality() -> void:

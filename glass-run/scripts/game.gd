@@ -114,6 +114,7 @@ var floaters: Array = []
 var auto := false
 var shots_at: Array = []
 var quit_at := -1.0
+var _ending := false
 var shot_dir := "user://"
 var test_screen := ""
 var test_mode := ""
@@ -732,7 +733,12 @@ func _notification(what: int) -> void:
 		if not auto and test_screen == "":
 			_pause()
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
-		if state == S.PLAY:
+		# (the app does not quit by itself on back: application/config/quit_on_go_back is off)
+		if hud.back():
+			return
+		if state == S.MENU:
+			get_tree().quit()
+		elif state == S.PLAY:
 			_pause()
 		elif state == S.PAUSE:
 			_resume()
@@ -1515,10 +1521,13 @@ func _process(delta: float) -> void:
 	if state == S.OVER or state == S.DONE:
 		if auto:
 			over_t += dt
-			if over_t > 2.0:
+			if over_t > 2.0 and not _ending:
+				# once only: the wait for the picture spans frames, and with no screen (--headless) none is drawn
+				_ending = true
 				print("END state=%s d=%d balls=%d crashes=%d broken=%d score=%d shots=%d hits=%d combo=%d" % [S.keys()[state], int(dist), balls, crashes, broken, score, shots, hits, best_combo])
-				await RenderingServer.frame_post_draw
-				get_viewport().get_texture().get_image().save_png(shot_dir + "end_%s.png" % mode)
+				if DisplayServer.get_name() != "headless":
+					await RenderingServer.frame_post_draw
+					get_viewport().get_texture().get_image().save_png(shot_dir + "end_%s.png" % mode)
 				get_tree().quit()
 		_update_shards(dt)
 		_update_balls(dt)
