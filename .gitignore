@@ -20,3 +20,9 @@ glass-run/android/
 *.keystore.b64
 upload.keystore
 glass-run/override.cfg
+
+# the second Godot game
+glass-rush/.godot/
+glass-rush/build/
+glass-rush/export.log
+glass-rush/flight.log
