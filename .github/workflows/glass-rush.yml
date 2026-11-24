@@ -1,0 +1,127 @@
+name: Glass Rush APK
+
+# the Godot game in glass-rush/ (an endless flight through the worlds of Glass Run): built into an APK on every
+# change and published to the "rush-latest" release. It is a separate app (com.boidbit.glassrush): it installs
+# next to Glass Run, it does not replace it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'glass-rush/**'
+      # the worlds, the glass, the sounds and the effects are Glass Run's, copied in at build time
+      - 'glass-run/scripts/worlds.gd'
+      - 'glass-run/scripts/glass.gd'
+      - 'glass-run/scripts/sfx.gd'
+      - 'glass-run/scripts/fx.gd'
+      - '.github/workflows/glass-rush.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: glass-rush-apk
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache Godot
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-android-debug-1
+
+      - name: Get Godot and its Android templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          T=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          mkdir -p ~/godot "$T"
+          cd ~/godot
+          curl -sSL -o g.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q g.zip && rm g.zip
+          curl -sSL -o t.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j t.tpz templates/android_debug.apk templates/android_release.apk templates/version.txt -d "$T"
+          rm t.tpz
+          ls -la "$T"
+
+      - name: Editor settings (Android SDK, Java, signing key)
+        run: |
+          MINOR=$(echo "${GODOT_VERSION}" | cut -d. -f1,2)
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-${MINOR}.tres <<EOT
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_SDK_ROOT}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          export/android/debug_keystore = "${GITHUB_WORKSPACE}/android/app/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOT
+
+      - name: The newest shared files from Glass Run
+        run: glass-rush/tools/sync_shared.sh
+
+      # minutes since 1 January 2026: only ever goes up, so each APK installs over the last one
+      - name: Version
+        run: |
+          VC=$(( ($(date -u +%s) - 1767225600) / 60 ))
+          sed -i "s/^version\/code=.*/version\/code=${VC}/" glass-rush/export_presets.cfg
+          sed -i "s/^version\/name=.*/version\/name=\"0.1.${GITHUB_RUN_NUMBER}\"/" glass-rush/export_presets.cfg
+          grep -E "^version/" glass-rush/export_presets.cfg
+
+      - name: Build the APK
+        working-directory: glass-rush
+        run: |
+          G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          mkdir -p build
+          $G --headless --import 2>&1 | tail -20 || true
+          $G --headless --export-debug "Android" build/GlassRush.apk 2>&1 | tee export.log
+          if [ ! -f build/GlassRush.apk ]; then
+            # show the reason on the run's summary page
+            msg=$(grep -iE "error|warn|fail" export.log | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=Godot export failed::${msg}"
+            exit 1
+          fi
+          ls -la build
+
+      - name: A short flight by the bot (no screen), so a broken script fails the build
+        working-directory: glass-rush
+        run: |
+          G=~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          timeout 300 $G --headless --audio-driver Dummy --fixed-fps 60 --max-fps 0 --path . -- --auto --seed=3 --quit-at=2500 2>&1 | tee flight.log | grep -E "^END|SCRIPT ERROR" || true
+          if grep -q "SCRIPT ERROR" flight.log; then
+            echo "::error title=Script error in the flight::see the log above"
+            exit 1
+          fi
+          grep -q "^END" flight.log || { echo "::error title=The flight did not finish::"; exit 1; }
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: GlassRush-apk
+          path: glass-rush/build/GlassRush.apk
+
+      - name: Publish to the "rush-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view rush-latest >/dev/null 2>&1 || gh release create rush-latest --title "Glass Rush (latest build)" --notes "The newest build of Glass Rush." --latest=false
+          gh release upload rush-latest glass-rush/build/GlassRush.apk --clobber
+          gh release edit rush-latest --notes "The newest build of Glass Rush (run ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}). Download GlassRush.apk and open it on your phone to install. It is its own app: it installs next to Glass Run."
