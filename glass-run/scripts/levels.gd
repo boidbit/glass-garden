@@ -1,10 +1,10 @@
-## Level 01, "First Light", made by hand: learn in the cathedral, through the crypt tunnel, down the great hall,
+## Level 01, "First Light", made by hand: learn in the neon city, through the tunnel, down the great hall,
 ## out through the roof into the sky (with glass to break below), and back in for the finale. About 90 seconds.
 class_name Levels
 extends RefCounted
 
 const L1_LEN := 712.0
-const L1_WORLD := "cathedral"
+const L1_WORLD := "neon"
 # the shape of the way: [from, to, what]
 const L1_SECT := [[144.0, 240.0, "tunnel"], [272.0, 384.0, "hall"], [416.0, 560.0, "sky"]]
 # [distance, what, how hard]

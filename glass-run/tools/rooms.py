@@ -1,6 +1,6 @@
 # The 50 rooms of the endless run, written by hand; this checks them and writes scripts/rooms.gd
 import sys
-WORLDS=["cathedral","venice","lanterns","mosaic","palace"]
+WORLDS=["neon","ocean","aurora","dunes","ice"]
 SKY_OK=set("giant slide_block fall_blocks scissors saw_disc diag_blade blade_line chessboard tile_rain rot_grid hole_glass tube twotone domino blocks pane split grid layers stack color_row tempered frosted slide rise hinge weak laminated shy spinner rotor prism mirror orbit blast snake shield halves flyin charge shutters drop".split())
 EXT={"layers":6.4,"frosted":1.6,"snake":10.4,"prism":19,"collapse":4.4,"boss":1,"fall_blocks":10,"blade_line":9,"door_line":12,"tube":9,"diag_blade":2.5}
 SKY_NO={"pendulum_blade","sensor_door","closing_doors","door_line","shutter_door","button_door","popout","pendulum","revolving","grille","collapse","doors"}
@@ -13,7 +13,7 @@ STAR=["", "chessboard", "sensor_door", "pendulum_blade", "tile_rain", "giant", "
 # rooms where the whole room turns about you
 SPIN=[6, 13, 22, 28, 29, 35, 43, 45, 48]
 R=[
-# ---- Cathedral: learn the glass, then the prism; the rose window at the end
+# ---- Neon city: learn the glass, then the prism; the great wheel at the end
 ("c200","28 pane/0, 48 J, 58 split/0, 84 grid/0, 108 J, 116 tempered/0, 142 stack/0, 164 J, 172 color_row/0"),
 ("c48 t96 c56","26 layers/0, 40 J, 64 frosted/0, 90 color_row/0, 112 J, 120 tempered/0, 160 split/0, 178 J"),
 ("c32 h96 c72","50 slide/1, 74 rise/1, 96 J, 104 hinge/1, 146 laminated/1, 170 J, 176 pane/1"),
@@ -24,7 +24,7 @@ R=[
 ("c32 s112 c56","48 layers/2, 72 drop/2, 92 J, 100 prism/2, 130 J, 160 pendulum/3, 178 J"),
 ("c48 h96 c56","26 shutters/3, 64 revolving/3, 90 charge/3, 112 J, 120 weak/3, 158 flyin/3, 176 J"),
 ("c64 t64 c72","24 halves/3, 46 J, 80 rotor/3, 104 shield/3, 140 J, 160 boss/3"),
-# ---- Venice: out over the lagoon, Murano mirrors, glass falling from the sky
+# ---- Ocean: out over the sea, mirrors, glass falling from the sky
 ("c32 s120 c48","48 pane/1, 70 drop/1, 92 J, 100 mirror/1, 126 drop/1, 168 split/1"),
 ("c40 h96 c64","22 grid/1, 56 slide/1, 80 mirror/2, 104 J, 112 color_row/2, 152 doors/2, 174 J"),
 ("c32 s136 c32","46 layers/2, 70 drop/2, 92 rise/2, 112 J, 120 orbit/2, 146 drop/2"),
@@ -35,7 +35,7 @@ R=[
 ("c48 t64 c88","26 blocks/3, 64 rotor/3, 90 frosted/3, 128 weak/3, 150 J, 156 flyin/3, 176 halves/3"),
 ("c32 s120 c48","46 drop/3, 66 orbit/3, 88 prism/3, 116 J, 126 drop/3, 166 shutters/3"),
 ("c40 s96 c64","22 split/3, 54 mirror/3, 76 drop/3, 98 J, 106 blast/3, 140 J, 160 boss/3"),
-# ---- Lanterns: night tunnels of red gates, glass that moves to the music, the dragon
+# ---- Aurora: night tunnels of light, glass that moves to the music, the snake
 ("c32 t120 c48","48 shutters/2, 72 snake/2, 100 J, 108 grid/2, 132 shutters/2, 168 split/2"),
 ("c40 s96 c64","22 pane/2, 56 drop/2, 78 spinner/2, 100 J, 108 drop/2, 152 revolving/2, 174 J"),
 ("c32 t136 c32","48 frosted/3, 72 rotor/3, 96 J, 104 shutters/3, 128 snake/3, 154 tempered/3"),
@@ -46,7 +46,7 @@ R=[
 ("c48 t96 c56","26 blocks/4, 64 rotor/4, 86 shutters/4, 108 J, 116 halves/4, 160 revolving/4"),
 ("c32 h96 c72","48 spinner/4, 72 blast/4, 96 J, 104 charge/4, 144 shutters/4, 166 snake/4"),
 ("c40 t80 c80","22 shutters/4, 56 snake/4, 84 J, 92 rotor/4, 138 J, 160 boss/4"),
-# ---- Mosaic: great courts of tile, rows of colour, the prism chain, blast glass
+# ---- Dunes: great courts of the solar city, rows of colour, the prism chain, blast glass
 ("c32 h112 c56","48 color_row/3, 72 grid/3, 96 J, 104 prism/3, 160 blast/3"),
 ("c40 t80 c80","22 stack/3, 56 tempered/3, 80 blocks/3, 100 J, 136 orbit/3, 160 color_row/3, 178 J"),
 ("c32 h128 c40","48 blast/4, 72 slide/4, 96 J, 104 prism/4, 136 grid/4"),
@@ -57,7 +57,7 @@ R=[
 ("c48 s104 c48","24 hinge/5, 64 drop/5, 84 blast/5, 104 J, 112 prism/5, 168 flyin/5"),
 ("c32 h96 c72","48 spinner/5, 72 halves/5, 96 J, 104 blocks/5, 144 shield/5, 168 revolving/5"),
 ("c40 h96 c64","22 color_row/5, 56 prism/5, 88 J, 96 blocks/5, 140 J, 160 boss/5"),
-# ---- The palace of mirrors: halls of mirrors, revolving doors, shields; the hardest
+# ---- Ice: halls of ice and mirrors, revolving doors, shields; the hardest
 ("c32 t112 c56","48 mirror/5, 72 revolving/5, 96 J, 104 shield/5, 128 charge/5, 164 halves/5"),
 ("c40 h96 c64","22 weak/5, 56 mirror/5, 80 blast/5, 104 J, 112 spinner/5, 152 pendulum/5, 174 J"),
 ("c32 s120 c48","48 drop/5, 68 mirror/5, 90 J, 98 shield/5, 122 drop/5, 166 flyin/5"),

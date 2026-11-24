@@ -532,22 +532,22 @@ static func _doors(G, g: GGate, d: float, how: String, r: int) -> void:
 ## the end of a level: a great turning wheel of glass with a golden heart
 # each world's great wheel: [inner ring, outer ring] colours, and the glass of the middle blades
 const BOSS := {
-	"cathedral": [[0, 4], [1, 2, 3, 0], "mid"],
-	"venice": [[3, 2], [3, 2, 3, 2], "mid"],
-	"lanterns": [[1, 0], [0, 1, 1, 0], "mid"],
-	"mosaic": [[3, 2], [3, 2, 1, 3], "thick"],
-	"palace": [[1, 4], [1, 1, 4, 1], "mirror"],
+	"neon": [[0, 4], [1, 2, 3, 0], "mid"],
+	"ocean": [[3, 2], [3, 2, 3, 2], "mid"],
+	"aurora": [[1, 0], [0, 1, 1, 0], "mid"],
+	"dunes": [[3, 2], [3, 2, 1, 3], "thick"],
+	"ice": [[1, 4], [1, 1, 4, 1], "mirror"],
 }
 
 
-static func finale(G, d: float, style := "cathedral") -> void:
+static func finale(G, d: float, style := "neon") -> void:
 	var n0: int = G.gates.size()
 	_finale(G, d, style)
 	G.mount(n0, "finale")
 
 
-static func _finale(G, d: float, style := "cathedral") -> void:
-	var B: Array = BOSS.get(style, BOSS.cathedral)
+static func _finale(G, d: float, style := "neon") -> void:
+	var B: Array = BOSS.get(style, BOSS.neon)
 	var g: GGate = G.new_gate("finale", d)
 	g.finale = true
 	var core: GPane = G.pane(g, Glass.ngon(12, 0.5, Vector2(0, EYE)), d, "thick", 1)
