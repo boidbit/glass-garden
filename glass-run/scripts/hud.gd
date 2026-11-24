@@ -433,8 +433,10 @@ func crack_screen() -> void:
 
 
 func _crack_image() -> ImageTexture:
-	var W := 480
-	var H := 270
+	# drawn the shape of the screen, upright or wide, so it is not pulled long when it fills it
+	var vs := get_viewport().get_visible_rect().size
+	var W := 480 if vs.x >= vs.y else 270
+	var H := 270 if vs.x >= vs.y else 480
 	var img := Image.create(W, H, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var c := Vector2(W * 0.62, H * 0.42)
@@ -843,7 +845,7 @@ func _setting_row(box: VBoxContainer, title: String, key: String) -> void:
 func _build_settings() -> Control:
 	var c := _card()
 	var box: VBoxContainer = c[1]
-	box.custom_minimum_size = Vector2(620, 0)
+	box.custom_minimum_size = Vector2(560, 0)
 	box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	var head := HBoxContainer.new()
 	var t := _label("Settings", f800, 46)
