@@ -1949,7 +1949,7 @@ func _update_balls(dt: float) -> void:
 					nb = hit_at + nrm * 0.06
 				else:
 					# it holds: a dull knock, the ball bounces back a little off it and drops
-					v = nrm * minf(vin * 0.22, 7.0) + Vector3(randf_range(-0.8, 0.8), 1.2, 0)
+					v = nrm * minf(vin * 0.12, 3.5) + Vector3(randf_range(-0.8, 0.8), 0.8, 0)
 					nb = hit_at + nrm * 0.06
 					shake = maxf(shake, 0.1)
 					sfx.play("thud", -6.0, randf_range(0.8, 0.95))
@@ -2010,7 +2010,8 @@ func _update_balls(dt: float) -> void:
 		pts.append(nb)
 		if pts.size() > 7:
 			pts.pop_front()
-		if b.life > 3.0 or -nb.z < dist - 3.0:
+		# gone once it is behind you, or coming back at you close to your face (a ball knocked back off glass)
+		if b.life > 3.0 or -nb.z < dist - 3.0 or (v.z > 0.0 and -nb.z < dist + 2.5):
 			node.queue_free()
 			flying.remove_at(i)
 		i -= 1
